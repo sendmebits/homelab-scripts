@@ -2,8 +2,8 @@
 # This script checks the health of specified disks using SMART data
 # It logs errors and optionally sends email alerts if issues are detected.
 
-# Load environment variables
-source /root/script_env  # Ensure this file contains EMAIL or other needed environment variables
+# Load script environment variables, ensure this file contains EMAIL or other needed environment variables
+source /root/scripts/script_env
 
 # Define a friendly name for this machine
 mname="Proxmox"
