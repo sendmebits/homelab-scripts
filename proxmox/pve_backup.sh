@@ -9,8 +9,8 @@ BACKUP_DIR="/mnt/pve/backup/pve_backup"
 # Sets a unique timestamp for the backup file name
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 
-# Load script environment variables
-source /root/script_env
+# Load script environment variables, ensure this file contains EMAIL or other needed environment variables
+source /root/scripts/script_env
 
 # Ensure the backup directory exists
 mkdir -p "$BACKUP_DIR"
@@ -19,7 +19,7 @@ mkdir -p "$BACKUP_DIR"
 INCLUDE=(
     "/etc/pve"          # Proxmox configuration
     /root/*.sh        # Custom scripts in the root folder
-    "/root/monitor"     # Monitoring scripts directory to back up
+    "/root/scripts"     # Monitoring scripts directory to back up
 )
 
 # Backup command with validation
