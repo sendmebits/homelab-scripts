@@ -9,7 +9,8 @@ source /root/scripts/script_env
 mname="Proxmox"
 
 # Temporary directory for storing the error log
-logloc="/root/monitor"
+logloc="/root/scripts"
+
 mkdir -p "$logloc"  # Ensure the directory exists
 
 # Default: Do not send emails unless errors are found
