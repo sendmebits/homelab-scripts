@@ -9,8 +9,8 @@ set -euo pipefail
 # Threshold for disk usage warning
 THRESHOLD=${THRESHOLD:-90}
 
-# Load environment variables, ensure this file contains EMAIL or other needed script environment variables
-source /root/script_env 
+# Load script environment variables, ensure this file contains EMAIL or other needed environment variables
+source /root/scripts/script_env
 
 # Extract disk usage data for LXC containers
 dusage=$(/usr/sbin/lvs --noheadings --units g -o lv_name,lv_size,data_percent |
