@@ -7,13 +7,12 @@
 THRESHOLD=99
 
 # Load environment variables, such as EMAIL, from an external file
-# Ensure /root/script_env is secure (permissions 600) and contains:
+# Ensure /root/scripts/script_env is secure (permissions 600) and contains:
 # EMAIL="your-email@example.com"
-source /root/script_env
+source /root/scripts/script_env
 
 # Get disk usage information, excluding certain types (e.g., tmpfs, cdrom)
 # Parse output to identify filesystems exceeding the threshold
-#dusage=$(df -Ph | grep -vE '^tmpfs|cdrom' | sed s/%//g | awk -v THRESHOLD=$THRESHOLD '{ if ($5 > THRESHOLD) print $0; }')
 dusage=$(df -Ph | grep -vE '^tmpfs|cdrom' | sed 's/%//g' | awk -v THRESHOLD=$THRESHOLD '{ if ($5 >= THRESHOLD) print $0; }')
 
 # Count the number of filesystems exceeding the threshold
