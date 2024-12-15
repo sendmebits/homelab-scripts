@@ -6,29 +6,27 @@
 function header_info {
 clear
 cat <<"EOF"
-  _____          _     _____           _        _ _ 
+  _____          _     _____           _        _ _
  |  __ \        | |   |_   _|         | |      | | |
  | |__) |__  ___| |_    | |  _ __  ___| |_ __ _| | |
  |  ___/ _ \/ __| __|   | | | '_ \/ __| __/ _` | | |
  | |  | (_) \__ \ |_   _| |_| | | \__ \ || (_| | | |
  |_|   \___/|___/\__| |_____|_| |_|___/\__\__,_|_|_|
-                                                    
+
 EOF
 }
 ###############################################################
 #          Add shell "export LS_OPTIONS"
 ###############################################################
 function shell_colour {
-# Define the .bashrc file path
-BASHRC_FILE="$HOME/.bashrc"
 
 # Check if the line exists and is commented
-if grep -q "^# export LS_OPTIONS='--color=auto'" "$BASHRC_FILE"; then
+if grep -q "^# export LS_OPTIONS='--color=auto'" "$HOME/.bashrc"; then
     # Uncomment the line by removing the leading #
-    sed -i "s/^# export LS_OPTIONS='--color=auto'/export LS_OPTIONS='--color=auto'/" "$BASHRC_FILE"
-    echo "Uncommented the line in $BASHRC_FILE."
+    sed -i "s/^# export LS_OPTIONS='--color=auto'/export LS_OPTIONS='--color=auto'/" "$HOME/.bashrc"
+    echo "Uncommented \"export LS_OPTIONS\" in $HOME/.bashrc"
 else
-    echo "The line is either already uncommented or doesn't exist in $BASHRC_FILE."
+    echo "\"export LS_OPTIONS\" is already uncommented or doesn't exist in $HOME/.bashrc"
 fi
 }
 
@@ -36,8 +34,6 @@ fi
 #          Customize the shell ls to my liking
 ###############################################################
 function shell_ls_settings {
-# Path to .bashrc
-BASHRC="$HOME/.bashrc"
 
 # The exact aliases we want
 ALIAS_LL="alias ll='ls \$LS_OPTIONS -al'"
@@ -46,7 +42,7 @@ ALIAS_L="alias l='ls \$LS_OPTIONS -og'"
 # Function to check if an exact alias exists
 check_alias_exists() {
     local alias_to_check="$1"
-    grep -Fx "$alias_to_check" "$BASHRC" >/dev/null
+    grep -Fx "$alias_to_check" "$HOME/.bashrc" >/dev/null
     return $?
 }
 
@@ -60,11 +56,11 @@ fi
 echo "Updating aliases..."
 
 # Backup the original file
-cp "$BASHRC" "$BASHRC.backup"
+cp "$HOME/.bashrc" "$HOME/.bashrc.backup"
 
 # Comment out existing ll and l aliases
-sed -i.bak '/^alias ll=/s/^/# /' "$BASHRC"
-sed -i.bak '/^alias l=/s/^/# /' "$BASHRC"
+sed -i.bak '/^alias ll=/s/^/# /' "$HOME/.bashrc"
+sed -i.bak '/^alias l=/s/^/# /' "$HOME/.bashrc"
 
 # Add new aliases at the end of the file
 echo "" >> "$BASHRC"
@@ -82,15 +78,13 @@ echo "Please run 'source ~/.bashrc' or start a new terminal session to apply cha
 ###############################################################
 function vi_settings {
 VIM_SETTING="set nocompatible"
-VIMRC="$HOME/.vimrc"
 
 # Check if the line exists
-if grep -q "$VIM_SETTING" "$VIMRC/.vimrc" 2>/dev/null; then
-    # Uncomment the line by removing the leading #
-	echo $VIM_SETTING > $VIMRC/.vimrc
-	echo "vim.tiny arrow key fix applied"
+if [ ! -f "$HOME/.vimrc" ] || ! grep -qF "$VIM_SETTING" "$HOME/.vimrc"; then
+        echo $VIM_SETTING > $HOME/.vimrc
+        echo "vim.tiny arrow key fix applied"
 else
-    echo "vi already configured correctly, no updates needed."
+        echo "vi already configured correctly, no updates needed."
 fi
 }
 
