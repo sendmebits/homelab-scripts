@@ -5,9 +5,6 @@
 # Load script environment variables, ensure this file contains EMAIL or other needed environment variables
 source /root/scripts/script_env
 
-# Define a friendly name for this machine
-mname="Proxmox"
-
 # Temporary directory for storing the error log
 logloc="/root/scripts"
 
@@ -44,7 +41,7 @@ for disk in $disks; do
   # Check if Reallocated Sector Count is non-zero
   if [ "${status[1]}" -ne 0 ]; then
     # Log the error details
-    echo "$mname Warning: Disk $disk has errors! ${status[0]} ${status[1]} ${status[2]} ${status[3]}. Full SMART output follows:" >> "$logloc/diskerror.log"
+    echo "$(hostname) Warning: Disk $disk has errors! ${status[0]} ${status[1]} ${status[2]} ${status[3]}. Full SMART output follows:" >> "$logloc/diskerror.log"
     smartctl -a -d ata "$disk" >> "$logloc/diskerror.log"
     failed+=("$disk")  # Track failed disks
     sendm="1"          # Trigger email alert
@@ -54,6 +51,6 @@ done
 # Send email alert if any disk failed
 if [ "$sendm" == "1" ]; then
   fdisks="${failed[*]}"
-  mail -s "$mname Alert: Disk(s) $fdisks may fail!" "$EMAIL" < "$logloc/diskerror.log"
+  mail -s "$(hostname) Alert: Disk(s) $fdisks may fail!" "$EMAIL" < "$logloc/diskerror.log"
   rm -f "$logloc/diskerror.log"  # Clean up log file
 fi
