@@ -45,28 +45,28 @@ function shell_colour {
 }
 
 ###############################################################
-#          Customize the shell ls to my liking
+#          Customize the shell listings to my liking
 ###############################################################
 function shell_ls_settings {
     # The exact aliases we want
     ALIAS_LL="alias ll='ls \$LS_OPTIONS -al'"
     ALIAS_L="alias l='ls \$LS_OPTIONS -og'"
     
-    # Function to check if an exact alias exists
+    # Function to check if an exact alias exists, ignoring leading whitespace
     check_alias_exists() {
         local alias_to_check="$1"
-        grep -Fx "$alias_to_check" "$HOME/.bashrc" >/dev/null
+        grep -Pzx '\s*'"$alias_to_check" "$HOME/.bashrc" >/dev/null
         return $?
     }
   
     # Function to check and handle 'll' alias
     handle_ll_alias() {
-        # Check if 'll' alias exists
-        if grep -q 'alias ll=' "$HOME/.bashrc"; then
+        # Check if 'll' alias exists, allowing leading whitespace
+        if grep -Pq '\s*alias ll=' "$HOME/.bashrc"; then
             # Check if it's exactly the desired alias
             if ! check_alias_exists "$ALIAS_LL"; then
-                # Comment out existing 'll' alias
-                sed -i.bak '/alias ll=/s/^/# /' "$HOME/.bashrc"
+                # Comment out existing 'll' alias, preserving any indentation
+                sed -i.bak '/^\s*alias ll=/s/^/# /' "$HOME/.bashrc"
                 
                 # Add new 'll' alias at the end
                 echo "" >> "$HOME/.bashrc"
@@ -90,12 +90,12 @@ function shell_ls_settings {
     
     # Function to check and handle 'l' alias
     handle_l_alias() {
-        # Check if 'l' alias exists
-        if grep -q 'alias l=' "$HOME/.bashrc"; then
+        # Check if 'l' alias exists, allowing leading whitespace
+        if grep -Pq '\s*alias l=' "$HOME/.bashrc"; then
             # Check if it's exactly the desired alias
             if ! check_alias_exists "$ALIAS_L"; then
-                # Comment out existing 'l' alias
-                sed -i.bak '/alias l=/s/^/# /' "$HOME/.bashrc"
+                # Comment out existing 'l' alias, preserving any indentation
+                sed -i.bak '/^\s*alias l=/s/^/# /' "$HOME/.bashrc"
                 
                 # Add new 'l' alias at the end
                 echo "" >> "$HOME/.bashrc"
