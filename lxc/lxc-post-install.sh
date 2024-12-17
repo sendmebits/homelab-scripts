@@ -55,7 +55,9 @@ function shell_ls_settings {
     # Function to check if an exact alias exists, ignoring leading whitespace
     check_alias_exists() {
         local alias_to_check="$1"
-        grep -Pzx '\s*'"$alias_to_check" "$HOME/.bashrc" >/dev/null
+        # Use perl regex to match the entire line, allowing leading whitespace
+        # and ensuring exact match of the alias content
+        grep -Pzx '\s*'"$(printf '%s' "$alias_to_check" | sed 's/[\/\*\.]/\\&/g')" "$HOME/.bashrc" >/dev/null
         return $?
     }
   
@@ -63,19 +65,22 @@ function shell_ls_settings {
     handle_ll_alias() {
         # Check if 'll' alias exists, allowing leading whitespace
         if grep -Pq '\s*alias ll=' "$HOME/.bashrc"; then
-            # Check if it's exactly the desired alias
-            if ! check_alias_exists "$ALIAS_LL"; then
-                # Comment out existing 'll' alias, preserving any indentation
-                sed -i.bak '/^\s*alias ll=/s/^/# /' "$HOME/.bashrc"
-                
-                # Add new 'll' alias at the end
-                echo "" >> "$HOME/.bashrc"
-                echo "# Custom ll alias" >> "$HOME/.bashrc"
-                echo "$ALIAS_LL" >> "$HOME/.bashrc"
-                
-                echo "Updated 'll' alias in $HOME/.bashrc"
-                return 1
+            # Check if it matches exactly the desired alias
+            if check_alias_exists "$ALIAS_LL"; then
+                # Alias already exists exactly as desired
+                return 0
             fi
+
+            # If not an exact match, comment out and add new
+            sed -i.bak '/^\s*alias ll=.*/s/^/# /' "$HOME/.bashrc"
+            
+            # Add new 'll' alias at the end
+            echo "" >> "$HOME/.bashrc"
+            echo "# Custom ll alias" >> "$HOME/.bashrc"
+            echo "$ALIAS_LL" >> "$HOME/.bashrc"
+            
+            echo "Commented old and added 'll' alias in $HOME/.bashrc"
+            return 1
         else
             # 'll' alias doesn't exist, add it
             echo "" >> "$HOME/.bashrc"
@@ -85,26 +90,28 @@ function shell_ls_settings {
             echo "Added 'll' alias in $HOME/.bashrc"
             return 1
         fi
-        return 0
     }
     
     # Function to check and handle 'l' alias
     handle_l_alias() {
         # Check if 'l' alias exists, allowing leading whitespace
         if grep -Pq '\s*alias l=' "$HOME/.bashrc"; then
-            # Check if it's exactly the desired alias
-            if ! check_alias_exists "$ALIAS_L"; then
-                # Comment out existing 'l' alias, preserving any indentation
-                sed -i.bak '/^\s*alias l=/s/^/# /' "$HOME/.bashrc"
-                
-                # Add new 'l' alias at the end
-                echo "" >> "$HOME/.bashrc"
-                echo "# Custom l alias" >> "$HOME/.bashrc"
-                echo "$ALIAS_L" >> "$HOME/.bashrc"
-                
-                echo "Updated 'l' alias in $HOME/.bashrc"
-                return 1
+            # Check if it matches exactly the desired alias
+            if check_alias_exists "$ALIAS_L"; then
+                # Alias already exists exactly as desired
+                return 0
             fi
+
+            # If not an exact match, comment out and add new
+            sed -i.bak '/^\s*alias l=.*/s/^/# /' "$HOME/.bashrc"
+            
+            # Add new 'l' alias at the end
+            echo "" >> "$HOME/.bashrc"
+            echo "# Custom l alias" >> "$HOME/.bashrc"
+            echo "$ALIAS_L" >> "$HOME/.bashrc"
+            
+            echo "Commented old and added 'l' alias in $HOME/.bashrc"
+            return 1
         else
             # 'l' alias doesn't exist, add it
             echo "" >> "$HOME/.bashrc"
@@ -114,7 +121,6 @@ function shell_ls_settings {
             echo "Added 'l' alias in $HOME/.bashrc"
             return 1
         fi
-        return 0
     }
     
     # Backup the original file before making changes
