@@ -51,17 +51,6 @@ function shell_ls_settings {
     # The exact aliases we want
     ALIAS_LL="alias ll='ls \$LS_OPTIONS -al'"
     ALIAS_L="alias l='ls \$LS_OPTIONS -og'"
-    
-    # Function to check if an exact alias exists, ignoring leading whitespace
-    check_alias_exists() {
-        local alias_to_check="$1"
-        # Print the alias for debugging
-        echo "Checking alias: $alias_to_check"
-        
-        # Use grep to match
-        grep -Pq "$alias_to_check" "$HOME/.bashrc" >/dev/null
-        return $?
-    }
   
     # Function to check and handle 'll' alias
     handle_ll_alias() {
