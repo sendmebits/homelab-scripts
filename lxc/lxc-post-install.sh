@@ -21,73 +21,139 @@ EOF
 #          Add shell "export LS_OPTIONS"
 ###############################################################
 function shell_colour {
+    # Ensure .bashrc exists, create it if not
+    if [ ! -f "$HOME/.bashrc" ]; then
+        touch "$HOME/.bashrc"
+        echo "Created $HOME/.bashrc"
+    fi
+    
+    # Check if the line exists and is commented
+    if grep -q "^# export LS_OPTIONS='--color=auto'" "$HOME/.bashrc"; then
+        # Uncomment the line by removing the leading #
+        sed -i "s/^# export LS_OPTIONS='--color=auto'/export LS_OPTIONS='--color=auto'/" "$HOME/.bashrc"
+        echo "Uncommented \"export LS_OPTIONS\" in $HOME/.bashrc"
+    
+    # Check if the line exists and is already uncommented
+    elif grep -q "^export LS_OPTIONS='--color=auto'" "$HOME/.bashrc"; then
+        echo "\"export LS_OPTIONS\" is already set in $HOME/.bashrc"
 
-# Check if the line exists and is commented
-if grep -q "^# export LS_OPTIONS='--color=auto'" "$HOME/.bashrc"; then
-    # Uncomment the line by removing the leading #
-    sed -i "s/^# export LS_OPTIONS='--color=auto'/export LS_OPTIONS='--color=auto'/" "$HOME/.bashrc"
-    echo "Uncommented \"export LS_OPTIONS\" in $HOME/.bashrc"
-else
-    echo "\"export LS_OPTIONS\" is already uncommented or doesn't exist in $HOME/.bashrc"
-fi
+    # If the line doesn't exist at all, add it
+    else
+        echo "export LS_OPTIONS='--color=auto'" >> "$HOME/.bashrc"
+        echo "Added \"export LS_OPTIONS\" to $HOME/.bashrc"
+    fi
 }
 
 ###############################################################
 #          Customize the shell ls to my liking
 ###############################################################
 function shell_ls_settings {
-
-# The exact aliases we want
-ALIAS_LL="alias ll='ls \$LS_OPTIONS -al'"
-ALIAS_L="alias l='ls \$LS_OPTIONS -og'"
-
-# Function to check if an exact alias exists
-check_alias_exists() {
-    local alias_to_check="$1"
-    grep -Fx "$alias_to_check" "$HOME/.bashrc" >/dev/null
-    return $?
-}
-
-# Check if both aliases already exist as expected
-if check_alias_exists "$ALIAS_LL" && check_alias_exists "$ALIAS_L"; then
-    echo "Both ls aliases already exist with the expected values. No changes needed."
-    return 0
-fi
-
-# If we get here, at least one alias needs to be updated
-echo "Updating aliases..."
-
-# Backup the original file
-cp "$HOME/.bashrc" "$HOME/.bashrc.backup"
-
-# Comment out existing ll and l aliases
-sed -i.bak '/^alias ll=/s/^/# /' "$HOME/.bashrc"
-sed -i.bak '/^alias l=/s/^/# /' "$HOME/.bashrc"
-
-# Add new aliases at the end of the file
-echo "" >> "$HOME/.bashrc"
-echo "# Custom aliases" >> "$HOME/.bashrc"
-echo "$ALIAS_LL" >> "$HOME/.bashrc"
-echo "$ALIAS_L" >> "$HOME/.bashrc"
-
-echo "Aliases have been updated in $HOME/.bashrc"
-echo "A backup has been created at $HOME/.bashrc.backup"
-echo "Please run 'source ~/.' or start a new terminal session to apply changes"
+    # The exact aliases we want
+    ALIAS_LL="alias ll='ls \$LS_OPTIONS -al'"
+    ALIAS_L="alias l='ls \$LS_OPTIONS -og'"
+    
+    # Function to check if an exact alias exists
+    check_alias_exists() {
+        local alias_to_check="$1"
+        grep -Fx "$alias_to_check" "$HOME/.bashrc" >/dev/null
+        return $?
+    }
+  
+    # Function to check and handle 'll' alias
+    handle_ll_alias() {
+        # Check if 'll' alias exists
+        if grep -q '^alias ll=' "$HOME/.bashrc"; then
+            # Check if it's exactly the desired alias
+            if ! check_alias_exists "$ALIAS_LL"; then
+                # Comment out existing 'll' alias
+                sed -i.bak '/^alias ll=/s/^/# /' "$HOME/.bashrc"
+                
+                # Add new 'll' alias at the end
+                echo "" >> "$HOME/.bashrc"
+                echo "# Custom ll alias" >> "$HOME/.bashrc"
+                echo "$ALIAS_LL" >> "$HOME/.bashrc"
+                
+                echo "Updated 'll' alias in $HOME/.bashrc"
+                return 1
+            fi
+        else
+            # 'll' alias doesn't exist, add it
+            echo "" >> "$HOME/.bashrc"
+            echo "# Custom ll alias" >> "$HOME/.bashrc"
+            echo "$ALIAS_LL" >> "$HOME/.bashrc"
+            
+            echo "Added 'll' alias in $HOME/.bashrc"
+            return 1
+        fi
+        return 0
+    }
+    
+    # Function to check and handle 'l' alias
+    handle_l_alias() {
+        # Check if 'l' alias exists
+        if grep -q '^alias l=' "$HOME/.bashrc"; then
+            # Check if it's exactly the desired alias
+            if ! check_alias_exists "$ALIAS_L"; then
+                # Comment out existing 'l' alias
+                sed -i.bak '/^alias l=/s/^/# /' "$HOME/.bashrc"
+                
+                # Add new 'l' alias at the end
+                echo "" >> "$HOME/.bashrc"
+                echo "# Custom l alias" >> "$HOME/.bashrc"
+                echo "$ALIAS_L" >> "$HOME/.bashrc"
+                
+                echo "Updated 'l' alias in $HOME/.bashrc"
+                return 1
+            fi
+        else
+            # 'l' alias doesn't exist, add it
+            echo "" >> "$HOME/.bashrc"
+            echo "# Custom l alias" >> "$HOME/.bashrc"
+            echo "$ALIAS_L" >> "$HOME/.bashrc"
+            
+            echo "Added 'l' alias in $HOME/.bashrc"
+            return 1
+        fi
+        return 0
+    }
+    
+    # Backup the original file before making changes
+    cp "$HOME/.bashrc" "$HOME/.bashrc.backup"
+    
+    # Track if any changes were made
+    changes_made=0
+    
+    # Handle 'll' alias
+    handle_ll_alias
+    changes_made=$((changes_made + $?))
+    
+    # Handle 'l' alias
+    handle_l_alias
+    changes_made=$((changes_made + $?))
+    
+    # Provide final summary
+    if [ $changes_made -gt 0 ]; then
+        echo "Aliases have been updated in $HOME/.bashrc"
+        echo "A backup has been created at $HOME/.bashrc.backup"
+        echo "Please run 'source ~/.bashrc' or start a new terminal session to apply changes"
+    else
+        echo "Both 'll' and 'l' aliases already exist with the expected values. No changes needed."
+    fi
 }
 
 ###############################################################
 #          Fix vim.tiny so arrow keys work
 ###############################################################
 function vi_settings {
-VIM_SETTING="set nocompatible"
-
-# Check if the line exists
-if [ ! -f "$HOME/.vimrc" ] || ! grep -qF "$VIM_SETTING" "$HOME/.vimrc"; then
-        echo $VIM_SETTING > $HOME/.vimrc
-        echo "vim.tiny arrow key fix applied"
-else
-        echo "vi already configured correctly, no updates needed."
-fi
+    VIM_SETTING="set nocompatible"
+    
+    # Check if the line exists
+    if [ ! -f "$HOME/.vimrc" ] || ! grep -qF "$VIM_SETTING" "$HOME/.vimrc"; then
+            echo $VIM_SETTING > $HOME/.vimrc
+            echo "vim.tiny arrow key fix applied"
+    else
+            echo "vi already configured correctly, no updates needed."
+    fi
 }
 
 # Run all the things
