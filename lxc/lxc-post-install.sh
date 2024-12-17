@@ -23,7 +23,7 @@ EOF
 function shell_colour {
 
 # Check if the line exists and is commented
-if grep -q "^# export LS_OPTIONS='--color=auto'" "$HOME/."; then
+if grep -q "^# export LS_OPTIONS='--color=auto'" "$HOME/.bashrc"; then
     # Uncomment the line by removing the leading #
     sed -i "s/^# export LS_OPTIONS='--color=auto'/export LS_OPTIONS='--color=auto'/" "$HOME/.bashrc"
     echo "Uncommented \"export LS_OPTIONS\" in $HOME/.bashrc"
@@ -58,20 +58,20 @@ fi
 echo "Updating aliases..."
 
 # Backup the original file
-cp "$HOME/." "$HOME/..backup"
+cp "$HOME/.bashrc" "$HOME/.bashrc.backup"
 
 # Comment out existing ll and l aliases
-sed -i.bak '/^alias ll=/s/^/# /' "$HOME/."
-sed -i.bak '/^alias l=/s/^/# /' "$HOME/."
+sed -i.bak '/^alias ll=/s/^/# /' "$HOME/.bashrc"
+sed -i.bak '/^alias l=/s/^/# /' "$HOME/.bashrc"
 
 # Add new aliases at the end of the file
-echo "" >> "$HOME/."
-echo "# Custom aliases" >> "$HOME/."
-echo "$ALIAS_LL" >> "$HOME/."
-echo "$ALIAS_L" >> "$HOME/."
+echo "" >> "$HOME/.bashrc"
+echo "# Custom aliases" >> "$HOME/.bashrc"
+echo "$ALIAS_LL" >> "$HOME/.bashrc"
+echo "$ALIAS_L" >> "$HOME/.bashrc"
 
-echo "Aliases have been updated in $HOME/."
-echo "A backup has been created at $HOME/..backup"
+echo "Aliases have been updated in $HOME/.bashrc"
+echo "A backup has been created at $HOME/.bashrc.backup"
 echo "Please run 'source ~/.' or start a new terminal session to apply changes"
 }
 
