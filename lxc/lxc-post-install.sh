@@ -1,5 +1,7 @@
 #!/bin/bash
-# This is a post install script for Proxmox LXC's to automatically apply customizations after deployment
+# Description: This is a post install script for Proxmox LXC's to automatically apply customizations after deployment
+# Usage: To run that latest version use: 
+#     bash -c "$(wget -qLO - https://raw.githubusercontent.com/sendmebits/homelab-scripts/refs/heads/main/lxc/lxc-post-install.sh)"
 # Author: sendmebits
 # License: MIT
 
@@ -21,7 +23,7 @@ EOF
 function shell_colour {
 
 # Check if the line exists and is commented
-if grep -q "^# export LS_OPTIONS='--color=auto'" "$HOME/.bashrc"; then
+if grep -q "^# export LS_OPTIONS='--color=auto'" "$HOME/."; then
     # Uncomment the line by removing the leading #
     sed -i "s/^# export LS_OPTIONS='--color=auto'/export LS_OPTIONS='--color=auto'/" "$HOME/.bashrc"
     echo "Uncommented \"export LS_OPTIONS\" in $HOME/.bashrc"
@@ -56,21 +58,21 @@ fi
 echo "Updating aliases..."
 
 # Backup the original file
-cp "$HOME/.bashrc" "$HOME/.bashrc.backup"
+cp "$HOME/." "$HOME/..backup"
 
 # Comment out existing ll and l aliases
-sed -i.bak '/^alias ll=/s/^/# /' "$HOME/.bashrc"
-sed -i.bak '/^alias l=/s/^/# /' "$HOME/.bashrc"
+sed -i.bak '/^alias ll=/s/^/# /' "$HOME/."
+sed -i.bak '/^alias l=/s/^/# /' "$HOME/."
 
 # Add new aliases at the end of the file
-echo "" >> "$BASHRC"
-echo "# Custom aliases" >> "$BASHRC"
-echo "$ALIAS_LL" >> "$BASHRC"
-echo "$ALIAS_L" >> "$BASHRC"
+echo "" >> "$HOME/."
+echo "# Custom aliases" >> "$HOME/."
+echo "$ALIAS_LL" >> "$HOME/."
+echo "$ALIAS_L" >> "$HOME/."
 
-echo "Aliases have been updated in $BASHRC"
-echo "A backup has been created at $BASHRC.backup"
-echo "Please run 'source ~/.bashrc' or start a new terminal session to apply changes"
+echo "Aliases have been updated in $HOME/."
+echo "A backup has been created at $HOME/..backup"
+echo "Please run 'source ~/.' or start a new terminal session to apply changes"
 }
 
 ###############################################################
