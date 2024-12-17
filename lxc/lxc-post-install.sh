@@ -147,12 +147,17 @@ function shell_ls_settings {
 function vi_settings {
     VIM_SETTING="set nocompatible"
     
-    # Check if the line exists
-    if [ ! -f "$HOME/.vimrc" ] || ! grep -qF "$VIM_SETTING" "$HOME/.vimrc"; then
-            echo $VIM_SETTING > $HOME/.vimrc
-            echo "vim.tiny arrow key fix applied"
+    # Ensure the .vimrc file exists, creating it if necessary
+    if [ ! -f "$HOME/.vimrc" ]; then
+        touch "$HOME/.vimrc"
+    fi
+    
+    # Check if the line exists in the .vimrc file
+    if ! grep -qF "$VIM_SETTING" "$HOME/.vimrc"; then
+        echo "$VIM_SETTING" >> "$HOME/.vimrc"
+        echo "vim.tiny arrow key fix applied"
     else
-            echo "vi already configured correctly, no updates needed."
+        echo "vi already configured correctly, no updates needed."
     fi
 }
 
