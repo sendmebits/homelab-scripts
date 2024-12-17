@@ -62,7 +62,7 @@ function shell_ls_settings {
     # Function to check and handle 'll' alias
     handle_ll_alias() {
         # Check if 'll' alias exists
-        if grep -q '^alias ll=' "$HOME/.bashrc"; then
+        if grep -q 'alias ll=' "$HOME/.bashrc"; then
             # Check if it's exactly the desired alias
             if ! check_alias_exists "$ALIAS_LL"; then
                 # Comment out existing 'll' alias
@@ -91,7 +91,7 @@ function shell_ls_settings {
     # Function to check and handle 'l' alias
     handle_l_alias() {
         # Check if 'l' alias exists
-        if grep -q '^alias l=' "$HOME/.bashrc"; then
+        if grep -q 'alias l=' "$HOME/.bashrc"; then
             # Check if it's exactly the desired alias
             if ! check_alias_exists "$ALIAS_L"; then
                 # Comment out existing 'l' alias
