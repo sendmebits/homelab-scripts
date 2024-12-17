@@ -66,7 +66,7 @@ function shell_ls_settings {
             # Check if it's exactly the desired alias
             if ! check_alias_exists "$ALIAS_LL"; then
                 # Comment out existing 'll' alias
-                sed -i.bak '/^alias ll=/s/^/# /' "$HOME/.bashrc"
+                sed -i.bak '/alias ll=/s/^/# /' "$HOME/.bashrc"
                 
                 # Add new 'll' alias at the end
                 echo "" >> "$HOME/.bashrc"
@@ -95,7 +95,7 @@ function shell_ls_settings {
             # Check if it's exactly the desired alias
             if ! check_alias_exists "$ALIAS_L"; then
                 # Comment out existing 'l' alias
-                sed -i.bak '/^alias l=/s/^/# /' "$HOME/.bashrc"
+                sed -i.bak '/alias l=/s/^/# /' "$HOME/.bashrc"
                 
                 # Add new 'l' alias at the end
                 echo "" >> "$HOME/.bashrc"
