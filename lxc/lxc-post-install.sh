@@ -49,8 +49,8 @@ function shell_colour {
 ###############################################################
 function shell_ls_settings {
     # The exact aliases we want
-    ALIAS_LL="alias ll='ls \$LS_OPTIONS -al'"
-    ALIAS_L="alias l='ls \$LS_OPTIONS -og'"
+    ALIAS_LL="alias ll='ls \\$LS_OPTIONS -al'"
+    ALIAS_L="alias l='ls \\$LS_OPTIONS -og'"
     
     # Function to check if an exact alias exists, ignoring leading whitespace
     check_alias_exists() {
@@ -58,9 +58,8 @@ function shell_ls_settings {
         # Print the alias for debugging
         echo "Checking alias: $alias_to_check"
         
-        # Use grep with -F (fixed strings) and -x (exact match)
-        # -P (Perl regex) can sometimes cause issues with $ escaping
-        grep -Fx "$alias_to_check" "$HOME/.bashrc" >/dev/null
+        # Use grep to match
+        grep -Pq "$alias_to_check" "$HOME/.bashrc" >/dev/null
         return $?
     }
   
