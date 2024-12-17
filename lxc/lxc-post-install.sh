@@ -49,8 +49,8 @@ function shell_colour {
 ###############################################################
 function shell_ls_settings {
     # The exact aliases we want
-    ALIAS_LL="alias ll='ls \\$LS_OPTIONS -al'"
-    ALIAS_L="alias l='ls \\$LS_OPTIONS -og'"
+    ALIAS_LL="alias ll='ls \$LS_OPTIONS -al'"
+    ALIAS_L="alias l='ls \$LS_OPTIONS -og'"
     
     # Function to check if an exact alias exists, ignoring leading whitespace
     check_alias_exists() {
@@ -68,7 +68,7 @@ function shell_ls_settings {
         # Check if 'll' alias exists, allowing leading whitespace
         if grep -Pq '\s*alias ll=' "$HOME/.bashrc"; then
             # Check if it's exactly the desired alias
-            if check_alias_exists "alias ll='ls \$LS_OPTIONS -al'"; then
+            if check_alias_exists "alias ll='ls \\$LS_OPTIONS -al'"; then
                 # Alias already exists exactly as desired
                 return 0
             fi
@@ -81,7 +81,7 @@ function shell_ls_settings {
             echo "# Custom ll alias" >> "$HOME/.bashrc"
             echo "$ALIAS_LL" >> "$HOME/.bashrc"
             
-            echo "Updated 'll' alias in $HOME/.bashrc"
+            echo "Commented old instance and added 'll' alias in $HOME/.bashrc"
             return 1
         else
             # 'll' alias doesn't exist, add it
@@ -99,7 +99,7 @@ function shell_ls_settings {
         # Check if 'l' alias exists, allowing leading whitespace
         if grep -Pq '\s*alias l=' "$HOME/.bashrc"; then
             # Check if it's exactly the desired alias
-            if check_alias_exists "alias l='ls \$LS_OPTIONS -og'"; then
+            if check_alias_exists "alias l='ls \\$LS_OPTIONS -og'"; then
                 # Alias already exists exactly as desired
                 return 0
             fi
@@ -112,7 +112,7 @@ function shell_ls_settings {
             echo "# Custom l alias" >> "$HOME/.bashrc"
             echo "$ALIAS_L" >> "$HOME/.bashrc"
             
-            echo "Updated 'l' alias in $HOME/.bashrc"
+            echo "Commented old instance and added 'l' alias in $HOME/.bashrc"
             return 1
         else
             # 'l' alias doesn't exist, add it
