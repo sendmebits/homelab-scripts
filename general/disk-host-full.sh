@@ -1,7 +1,7 @@
 #!/bin/bash
-
-# This script checks if your disks are reaching a specified usage threshold 
-# and sends an email alert if any disks are critically full.
+# Description: This script checks if your disks are reaching a specified usage threshold and sends an email alert if any disks are critically full.
+# Author: sendmebits
+# License: MIT
 
 # Set the percent-full threshold for triggering an alert (default: 99%)
 THRESHOLD=99
