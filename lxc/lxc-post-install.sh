@@ -68,7 +68,7 @@ function shell_ls_settings {
         # Check if 'll' alias exists, allowing leading whitespace
         if grep -Pq '\s*alias ll=' "$HOME/.bashrc"; then
             # Check if it's exactly the desired alias
-            if check_alias_exists "alias ll='ls \\$LS_OPTIONS -al'"; then
+            if grep -Pq "alias ll='ls \\$LS_OPTIONS -al'" "$HOME/.bashrc"; then
                 # Alias already exists exactly as desired
                 return 0
             fi
