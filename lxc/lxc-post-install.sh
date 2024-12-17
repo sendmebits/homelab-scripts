@@ -55,9 +55,12 @@ function shell_ls_settings {
     # Function to check if an exact alias exists, ignoring leading whitespace
     check_alias_exists() {
         local alias_to_check="$1"
-        # Use perl regex to match the entire line, allowing leading whitespace
-        # and ensuring exact match of the alias content
-        grep -Pzx '\s*'"$(printf '%s' "$alias_to_check" | sed 's/[\/\*\.]/\\&/g')" "$HOME/.bashrc" >/dev/null
+        # Print the alias for debugging
+        echo "Checking alias: $alias_to_check"
+        
+        # Use grep with -F (fixed strings) and -x (exact match)
+        # -P (Perl regex) can sometimes cause issues with $ escaping
+        grep -Fx "$alias_to_check" "$HOME/.bashrc" >/dev/null
         return $?
     }
   
@@ -65,8 +68,8 @@ function shell_ls_settings {
     handle_ll_alias() {
         # Check if 'll' alias exists, allowing leading whitespace
         if grep -Pq '\s*alias ll=' "$HOME/.bashrc"; then
-            # Check if it matches exactly the desired alias
-            if check_alias_exists "$ALIAS_LL"; then
+            # Check if it's exactly the desired alias
+            if check_alias_exists "alias ll='ls \$LS_OPTIONS -al'"; then
                 # Alias already exists exactly as desired
                 return 0
             fi
@@ -79,7 +82,7 @@ function shell_ls_settings {
             echo "# Custom ll alias" >> "$HOME/.bashrc"
             echo "$ALIAS_LL" >> "$HOME/.bashrc"
             
-            echo "Commented old and added 'll' alias in $HOME/.bashrc"
+            echo "Updated 'll' alias in $HOME/.bashrc"
             return 1
         else
             # 'll' alias doesn't exist, add it
@@ -96,8 +99,8 @@ function shell_ls_settings {
     handle_l_alias() {
         # Check if 'l' alias exists, allowing leading whitespace
         if grep -Pq '\s*alias l=' "$HOME/.bashrc"; then
-            # Check if it matches exactly the desired alias
-            if check_alias_exists "$ALIAS_L"; then
+            # Check if it's exactly the desired alias
+            if check_alias_exists "alias l='ls \$LS_OPTIONS -og'"; then
                 # Alias already exists exactly as desired
                 return 0
             fi
@@ -110,12 +113,12 @@ function shell_ls_settings {
             echo "# Custom l alias" >> "$HOME/.bashrc"
             echo "$ALIAS_L" >> "$HOME/.bashrc"
             
-            echo "Commented old and added 'l' alias in $HOME/.bashrc"
+            echo "Updated 'l' alias in $HOME/.bashrc"
             return 1
         else
             # 'l' alias doesn't exist, add it
             echo "" >> "$HOME/.bashrc"
-            echo "# Custom l alias" >> "$HOME/.bashrc"
+            echo "# Custom l' alias" >> "$HOME/.bashrc"
             echo "$ALIAS_L" >> "$HOME/.bashrc"
             
             echo "Added 'l' alias in $HOME/.bashrc"
