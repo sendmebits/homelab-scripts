@@ -34,7 +34,7 @@ function shell_colour {
         echo "Uncommented \"export LS_OPTIONS\" in $HOME/.bashrc"
     
     # Check if the line exists and is already uncommented
-    elif grep -q "^export LS_OPTIONS='--color=auto'" "$HOME/.bashrc"; then
+    elif grep -q "export LS_OPTIONS='--color=auto'" "$HOME/.bashrc"; then
         echo "\"export LS_OPTIONS\" is already set in $HOME/.bashrc"
 
     # If the line doesn't exist at all, add it
