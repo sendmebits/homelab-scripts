@@ -1,7 +1,8 @@
 #!/bin/bash
-
 # Proxmox Backup Script
-# This script backs up PVE config data and key scripts to the backup directory.
+# Description: This script backs up PVE config data and key scripts to the backup directory.
+# Author: sendmebits
+# License: MIT
 
 # Set the folder where you want the backup to go
 BACKUP_DIR="/mnt/pve/backup/pve_backup"
