@@ -1,7 +1,8 @@
 #!/bin/bash
-
-# This script checks all running LXC containers from a Proxmox host to ensure their disks aren't too full.
+# Description: This script checks all running LXC containers from a Proxmox host to ensure their disks aren't too full.
 # Usage: Run this script hourly to check frequently for disks that are full and in trouble!
+# Author: sendmebits
+# License: MIT
 
 # Error handling
 set -euo pipefail
