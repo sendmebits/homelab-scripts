@@ -1,6 +1,7 @@
 #!/bin/bash
-# This script checks the health of specified disks using SMART data
-# It logs errors and optionally sends email alerts if issues are detected.
+# Description: This script checks the health of specified disks using SMART data. # It logs errors and optionally sends email alerts if issues are detected.
+# Author: sendmebits
+# License: MIT
 
 # Load script environment variables, ensure this file contains EMAIL or other needed environment variables
 source /root/scripts/script_env
