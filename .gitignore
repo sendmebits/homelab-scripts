@@ -1,0 +1,30 @@
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.vim/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs & Temp
+*.log
+*.tmp
+*.bak
+
+# Virtual environments
+venv/
+env/
+.python-venv/
+
+# Build artifacts
+build/
+dist/
