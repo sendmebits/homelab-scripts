@@ -3,6 +3,11 @@
 # General Linux cleanup script for Debian/Ubuntu
 # Performs comprehensive system cleanup with safety checks
 #
+# Usage: sudo ./cleanup.sh
+# To update: sudo ./cleanup.sh --update
+# Updating refreshes with the latest updates from: 
+# https://raw.githubusercontent.com/sendmebits/homelab-scripts/refs/heads/main/general/cleanup.sh
+#
 
 set -e  # Exit on error
 set -u  # Exit on undefined variable
@@ -31,6 +36,63 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# ============================================================================
+# Self-Update Feature
+# ============================================================================
+SCRIPT_URL="https://raw.githubusercontent.com/sendmebits/homelab-scripts/refs/heads/main/general/cleanup.sh"
+SCRIPT_PATH="$(readlink -f "$0")"
+GITHUB_API_URL="https://api.github.com/repos/sendmebits/homelab-scripts/contents/general/cleanup.sh"
+
+# Efficient version check using GitHub API (SHA comparison)
+check_for_updates() {
+    # Get remote SHA from GitHub API (lightweight JSON response)
+    REMOTE_SHA=$(curl -fsSL --max-time 2 "$GITHUB_API_URL" 2>/dev/null | grep -o '"sha": "[^"]*"' | head -1 | cut -d'"' -f4)
+    
+    if [[ -n "$REMOTE_SHA" ]]; then
+        # Calculate local file SHA (same algorithm GitHub uses: blob + size + content)
+        LOCAL_SHA=$(git hash-object "$SCRIPT_PATH" 2>/dev/null || sha1sum "$SCRIPT_PATH" 2>/dev/null | awk '{print $1}')
+        
+        if [[ -n "$LOCAL_SHA" ]] && [[ "$REMOTE_SHA" != "$LOCAL_SHA" ]]; then
+            log_info "═══════════════════════════════════════════════════════════════"
+            log_warning "A newer version of this script is available!"
+            log_info "Run 'sudo $0 --update' to update to the latest version"
+            log_info "═══════════════════════════════════════════════════════════════"
+        fi
+    fi
+}
+
+# Run version check in background to avoid delaying script execution
+check_for_updates &
+
+if [[ "${1:-}" == "--update" ]]; then
+    log_info "Updating cleanup.sh from GitHub..."
+    
+    # Create a backup
+    BACKUP_PATH="${SCRIPT_PATH}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$SCRIPT_PATH" "$BACKUP_PATH"
+    log_info "Created backup at: $BACKUP_PATH"
+    
+    # Download the latest version
+    if curl -fsSL "$SCRIPT_URL" -o "${SCRIPT_PATH}.tmp"; then
+        # Verify the downloaded file is not empty and starts with shebang
+        if [[ -s "${SCRIPT_PATH}.tmp" ]] && head -n1 "${SCRIPT_PATH}.tmp" | grep -q "^#!/bin/bash"; then
+            mv "${SCRIPT_PATH}.tmp" "$SCRIPT_PATH"
+            chmod +x "$SCRIPT_PATH"
+            log_success "Script updated successfully!"
+            log_info "Backup saved at: $BACKUP_PATH"
+            exit 0
+        else
+            log_error "Downloaded file appears invalid"
+            rm -f "${SCRIPT_PATH}.tmp"
+            exit 1
+        fi
+    else
+        log_error "Failed to download update from GitHub"
+        rm -f "${SCRIPT_PATH}.tmp"
+        exit 1
+    fi
+fi
+
 # Check if running as root
 if [[ $EUID -ne 0 ]]; then
    log_error "This script must be run as root or with sudo"
@@ -38,7 +100,6 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 log_info "Starting system cleanup..."
-echo ""
 
 # Get initial disk usage
 INITIAL_USAGE=$(df / | awk 'NR==2 {print $3}')
@@ -51,7 +112,7 @@ apt-get update -qq
 log_success "Package lists updated"
 
 log_info "Removing unnecessary packages (autoremove)..."
-apt-get -y autoremove --purge
+apt-get -y autoremove --purge > /dev/null 2>&1
 log_success "Unnecessary packages removed"
 
 log_info "Cleaning apt cache..."
@@ -72,10 +133,8 @@ rm -rf /var/lib/apt/lists/*
 log_success "Package list files cleared"
 
 if [ -f /var/run/reboot-required ]; then
-    echo ""
     log_warning "A system reboot is required! Newly installed kernels might not be active yet."
 fi
-
 
 # ============================================================================
 # Systemd Journal Cleanup
@@ -256,7 +315,7 @@ fi
 # pnpm cleanup (only if pnpm is installed)
 if command -v pnpm &> /dev/null; then
     log_info "Pruning pnpm store..."
-    pnpm store prune 2>/dev/null || log_warning "PNPM store prune had issues"
+    pnpm store prune > /dev/null 2>&1 || log_warning "PNPM store prune had issues"
     log_success "PNPM store pruned"
 else
     log_info "pnpm not installed, skipping pnpm cleanup"
@@ -384,8 +443,9 @@ fi
 # ============================================================================
 # Summary
 # ============================================================================
-echo ""
+log_info "═══════════════════════════════════════════════════════════════"
 log_info "Cleanup completed!"
+log_info "═══════════════════════════════════════════════════════════════"
 
 # Sync filesystem to ensure changes are written
 sync
@@ -402,9 +462,7 @@ else
 fi
 
 # Show current disk usage
-echo ""
 log_info "Current disk usage:"
 df -h / | awk 'NR==1 {print $0} NR==2 {printf "  Used: %s / %s (%s)\n", $3, $2, $5}'
 
-echo ""
 log_success "All cleanup tasks completed successfully!"
