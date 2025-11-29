@@ -48,15 +48,15 @@ INITIAL_USAGE=$(df / | awk 'NR==2 {print $3}')
 # ============================================================================
 log_info "Updating package lists..."
 apt-get update -qq
+log_success "Package lists updated"
 
 log_info "Removing unnecessary packages (autoremove)..."
 apt-get -y autoremove --purge
+log_success "Unnecessary packages removed"
 
 log_info "Cleaning apt cache..."
 apt-get -y clean
-
-log_info "Removing outdated cached packages..."
-apt-get -y autoclean
+log_success "APT cache cleaned"
 
 log_info "Purging packages in 'rc' state (removed but config remains)..."
 RC_PACKAGES=$(dpkg -l | awk '/^rc/ {print $2}')
@@ -69,19 +69,25 @@ fi
 
 log_info "Clearing downloaded package list files..."
 rm -rf /var/lib/apt/lists/*
+log_success "Package list files cleared"
 
 if [ -f /var/run/reboot-required ]; then
+    echo ""
     log_warning "A system reboot is required! Newly installed kernels might not be active yet."
 fi
+
 
 # ============================================================================
 # Systemd Journal Cleanup
 # ============================================================================
 log_info "Truncating systemd journal logs (keeping last 7 days)..."
-journalctl --vacuum-time=7d
+journalctl --vacuum-time=7d >/dev/null 2>&1
+log_success "Journal logs truncated"
 
 log_info "Limiting journal size to 100MB..."
-journalctl --vacuum-size=100M
+journalctl --vacuum-size=100M >/dev/null 2>&1
+log_success "Journal size limited"
+
 
 # ============================================================================
 # Log Files Cleanup
@@ -92,6 +98,7 @@ find /var/log -type f -name "*.1" -delete 2>/dev/null || true
 find /var/log -type f -name "*.old" -delete 2>/dev/null || true
 log_success "Removed old rotated logs"
 
+
 # ============================================================================
 # Systemd Coredumps Cleanup
 # ============================================================================
@@ -99,7 +106,10 @@ if [[ -d /var/lib/systemd/coredump ]]; then
     log_info "Removing systemd coredumps..."
     rm -rf /var/lib/systemd/coredump/*
     log_success "Removed coredumps"
+else
+    log_info "No coredump directory found, skipping"
 fi
+
 
 # ============================================================================
 # Man Page Cache Cleanup
@@ -108,7 +118,10 @@ if [[ -d /var/cache/man ]]; then
     log_info "Clearing man page cache..."
     rm -rf /var/cache/man/*
     log_success "Cleared man page cache"
+else
+    log_info "No man page cache found, skipping"
 fi
+
 
 # ============================================================================
 # Trash/Recycle Bin Cleanup
@@ -133,6 +146,7 @@ else
     log_info "No trash to clean"
 fi
 
+
 # ============================================================================
 # Crash Reports Cleanup
 # ============================================================================
@@ -147,6 +161,7 @@ if [[ -d /var/crash ]]; then
     fi
 fi
 
+
 # ============================================================================
 # APT Partial Downloads Cleanup
 # ============================================================================
@@ -154,7 +169,10 @@ if [[ -d /var/cache/apt/archives/partial ]]; then
     log_info "Clearing partial APT downloads..."
     rm -rf /var/cache/apt/archives/partial/* 2>/dev/null || true
     log_success "Cleared partial downloads"
+else
+    log_info "No partial downloads directory found, skipping"
 fi
+
 
 # ============================================================================
 # Python Pip Cache Cleanup
@@ -171,6 +189,7 @@ if command -v pip &> /dev/null; then
     log_success "Pip cache cleared"
 fi
 
+
 # ============================================================================
 # NPM Cache Cleanup (if Node.js is installed)
 # ============================================================================
@@ -179,6 +198,7 @@ if command -v npm &> /dev/null; then
     npm cache clean --force 2>/dev/null || log_warning "NPM cache cleanup had issues"
     log_success "NPM cache cleared"
 fi
+
 
 # ============================================================================
 # Reset Failed Systemd Units
@@ -191,6 +211,7 @@ if [[ $FAILED_COUNT -gt 0 ]]; then
 else
     log_info "No failed systemd units to reset"
 fi
+
 
 # ============================================================================
 # Docker Cleanup (if installed)
@@ -205,6 +226,7 @@ if command -v docker &> /dev/null; then
 else
     log_info "Docker not installed, skipping Docker cleanup"
 fi
+
 
 # ============================================================================
 # Snap Cleanup (if installed - common on Ubuntu)
@@ -229,6 +251,7 @@ else
     log_info "Snap not installed, skipping snap cleanup"
 fi
 
+
 # ============================================================================
 # Flatpak Cleanup (if installed)
 # ============================================================================
@@ -239,6 +262,7 @@ if command -v flatpak &> /dev/null; then
 else
     log_info "Flatpak not installed, skipping flatpak cleanup"
 fi
+
 
 # ============================================================================
 # Temporary Files Cleanup
@@ -254,6 +278,7 @@ find /var/tmp -type f -atime +7 -delete 2>/dev/null || true
 find /var/tmp -type d -empty -delete 2>/dev/null || true
 log_success "Cleaned old /var/tmp files"
 
+
 # ============================================================================
 # Locale Purge (Optional)
 # ============================================================================
@@ -262,6 +287,7 @@ if command -v localepurge &> /dev/null; then
     localepurge 2>/dev/null || true
     log_success "Unused locales removed"
 fi
+
 
 # ============================================================================
 # Summary
