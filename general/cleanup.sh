@@ -65,8 +65,8 @@ check_for_updates() {
 if [[ "${1:-}" == "--update" ]]; then
     log_info "Updating cleanup.sh from GitHub..."
     
-    # Create a backup
-    BACKUP_PATH="${SCRIPT_PATH}.backup.$(date +%Y%m%d_%H%M%S)"
+    # Create a backup (overwrites previous backup if it exists)
+    BACKUP_PATH="${SCRIPT_PATH}.backup"
     cp "$SCRIPT_PATH" "$BACKUP_PATH"
     log_info "Created backup at: $BACKUP_PATH"
     
