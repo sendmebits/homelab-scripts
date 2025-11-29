@@ -6,6 +6,9 @@ Scans docker compose files and checks running containers for available updates.
 Pre-reqs:
 > sudo apt install python3-yaml python3-requests
 
+Download: 
+> curl -fsSL https://raw.githubusercontent.com/sendmebits/homelab-scripts/refs/heads/main/general/check_images.py -o cleanup.sh && chmod +x check_images.py
+
 """
 
 import os
