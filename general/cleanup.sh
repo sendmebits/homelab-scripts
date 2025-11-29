@@ -3,9 +3,12 @@
 # General Linux cleanup script for Debian/Ubuntu
 # Performs comprehensive system cleanup with safety checks
 #
-# Usage: sudo ./cleanup.sh
-# To update: sudo ./cleanup.sh --update
-# Download: curl -fsSL https://raw.githubusercontent.com/sendmebits/homelab-scripts/refs/heads/main/general/cleanup.sh -o cleanup.sh && chmod +x cleanup.sh
+# Usage:
+#   > sudo ./cleanup.sh
+# To update: 
+#   > sudo ./cleanup.sh --update
+# Download: 
+#   > curl -fsSL https://raw.githubusercontent.com/sendmebits/homelab-scripts/refs/heads/main/general/cleanup.sh -o cleanup.sh && chmod +x cleanup.sh
 #
 # Author: sendmebits
 #
