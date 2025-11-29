@@ -74,8 +74,8 @@ if [[ "${1:-}" == "--update" ]]; then
     
     # Download the latest version
     if curl -fsSL "$SCRIPT_URL" -o "${SCRIPT_PATH}.tmp"; then
-        # Verify the downloaded file is not empty and starts with shebang (allow leading whitespace)
-        if [[ -s "${SCRIPT_PATH}.tmp" ]] && head -n1 "${SCRIPT_PATH}.tmp" | grep -q "^[[:space:]]*#!/bin/bash"; then
+        # Verify the downloaded file is not empty and starts with shebang
+        if [[ -s "${SCRIPT_PATH}.tmp" ]] && head -n1 "${SCRIPT_PATH}.tmp" | grep -q "^#!/bin/bash"; then
             mv "${SCRIPT_PATH}.tmp" "$SCRIPT_PATH"
             chmod +x "$SCRIPT_PATH"
             log_success "Script updated successfully!"
@@ -83,8 +83,6 @@ if [[ "${1:-}" == "--update" ]]; then
             exit 0
         else
             log_error "Downloaded file appears invalid"
-            log_info "First line of downloaded file:"
-            head -n1 "${SCRIPT_PATH}.tmp" | cat -A
             rm -f "${SCRIPT_PATH}.tmp"
             exit 1
         fi
