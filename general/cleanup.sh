@@ -77,7 +77,6 @@ if [[ "${1:-}" == "--update" ]]; then
             mv "${SCRIPT_PATH}.tmp" "$SCRIPT_PATH"
             chmod +x "$SCRIPT_PATH"
             log_success "Script updated successfully!"
-            log_info "Backup saved at: $BACKUP_PATH"
             exit 0
         else
             log_error "Downloaded file appears invalid"
