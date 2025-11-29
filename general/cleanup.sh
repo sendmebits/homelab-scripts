@@ -429,8 +429,12 @@ sync
 FINAL_USAGE=$(df / | awk 'NR==2 {print $3}')
 SPACE_FREED=$((INITIAL_USAGE - FINAL_USAGE))
 
-SPACE_FREED_MB=$((SPACE_FREED / 1024))
-log_success "Freed approximately ${SPACE_FREED_MB}MB of disk space"
+SPACE_FREED_HUMAN=$(echo "$SPACE_FREED" | awk '{
+    if ($1 >= 1048576) printf "%.2fG", $1/1048576;
+    else if ($1 >= 1024) printf "%.2fM", $1/1024;
+    else printf "%dK", $1
+}')
+log_success "Freed approximately $SPACE_FREED_HUMAN of disk space"
 
 log_info "Current disk usage:"
 df -h / | awk -v blue="$BLUE" -v nc="$NC" 'NR==2 {printf "%s[INFO]%s   Used: %s / %s (%s)\n", blue, nc, $3, $2, $5}'
