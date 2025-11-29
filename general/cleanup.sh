@@ -426,7 +426,7 @@ if [[ $SPACE_FREED -gt 0 ]]; then
     SPACE_FREED_MB=$((SPACE_FREED / 1024))
     log_success "Freed approximately ${SPACE_FREED_MB}MB of disk space"
 else
-    log_info "Disk usage calculation: minimal or no space freed (this is normal if system was already clean)"
+    log_info "Minimal or no space freed, this is normal if system was already clean"
 fi
 
 # Show current disk usage
