@@ -191,12 +191,104 @@ fi
 
 
 # ============================================================================
-# NPM Cache Cleanup (if Node.js is installed)
+# NPM/Yarn/PNPM Cache Cleanup (if Node.js package managers are installed)
 # ============================================================================
+log_info "Checking for Node.js package manager caches..."
+
+# Define npm-specific directories to clean
+NPM_CACHE_DIRS=(
+  "$HOME/.npm"
+  "$HOME/.npm/_logs"
+  "$HOME/.yarn/cache"
+  "$HOME/.pnpm-store"
+  "$HOME/.local/share/pnpm/store"
+  "$HOME/Library/Caches/yarn"
+  "$HOME/Library/Caches/pnpm"
+)
+
+# Also check for all user home directories
+for user_home in /home/*; do
+    if [[ -d "$user_home" ]]; then
+        NPM_CACHE_DIRS+=(
+            "$user_home/.npm"
+            "$user_home/.npm/_logs"
+            "$user_home/.yarn/cache"
+            "$user_home/.pnpm-store"
+            "$user_home/.local/share/pnpm/store"
+        )
+    fi
+done
+
+# Function to calculate directory size in KB
+calculate_size_kb() {
+    if [[ -d "$1" ]]; then
+        du -sk "$1" 2>/dev/null | awk '{print $1}'
+    else
+        echo "0"
+    fi
+}
+
+# Track total space before cleanup
+TOTAL_BEFORE=0
+for DIR in "${NPM_CACHE_DIRS[@]}"; do
+    SIZE=$(calculate_size_kb "$DIR")
+    TOTAL_BEFORE=$((TOTAL_BEFORE + SIZE))
+done
+
+# npm cleanup (only if npm is installed)
 if command -v npm &> /dev/null; then
     log_info "Clearing npm cache..."
     npm cache clean --force 2>/dev/null || log_warning "NPM cache cleanup had issues"
     log_success "NPM cache cleared"
+else
+    log_info "npm not installed, skipping npm cache cleanup"
+fi
+
+# yarn cleanup (only if yarn is installed)
+if command -v yarn &> /dev/null; then
+    log_info "Clearing yarn cache..."
+    yarn cache clean 2>/dev/null || log_warning "Yarn cache cleanup had issues"
+    log_success "Yarn cache cleared"
+else
+    log_info "yarn not installed, skipping yarn cache cleanup"
+fi
+
+# pnpm cleanup (only if pnpm is installed)
+if command -v pnpm &> /dev/null; then
+    log_info "Pruning pnpm store..."
+    pnpm store prune 2>/dev/null || log_warning "PNPM store prune had issues"
+    log_success "PNPM store pruned"
+else
+    log_info "pnpm not installed, skipping pnpm cleanup"
+fi
+
+# Clean npm-specific cache directories manually
+log_info "Removing package manager cache directories..."
+DIRS_REMOVED=0
+for DIR in "${NPM_CACHE_DIRS[@]}"; do
+    if [[ -d "$DIR" ]]; then
+        rm -rf "$DIR" 2>/dev/null && ((DIRS_REMOVED++)) || true
+    fi
+done
+
+if [[ $DIRS_REMOVED -gt 0 ]]; then
+    log_success "Removed $DIRS_REMOVED cache director(ies)"
+fi
+
+# Track total space after cleanup
+TOTAL_AFTER=0
+for DIR in "${NPM_CACHE_DIRS[@]}"; do
+    SIZE=$(calculate_size_kb "$DIR")
+    TOTAL_AFTER=$((TOTAL_AFTER + SIZE))
+done
+
+# Calculate and display space freed
+NPM_SPACE_FREED=$((TOTAL_BEFORE - TOTAL_AFTER))
+if [[ $NPM_SPACE_FREED -gt 0 ]]; then
+    NPM_SPACE_FREED_MB=$((NPM_SPACE_FREED / 1024))
+    log_success "Package manager cache cleanup freed approximately ${NPM_SPACE_FREED_MB}MB"
+else
+    log_info "No significant space freed from package manager caches"
 fi
 
 
