@@ -51,6 +51,10 @@ SCRIPT_URL="https://raw.githubusercontent.com/sendmebits/homelab-scripts/refs/he
 SCRIPT_PATH="$(readlink -f "$0")"
 GITHUB_API_URL="https://api.github.com/repos/sendmebits/homelab-scripts/contents/general/cleanup.sh"
 
+# Temp file for background update check
+UPDATE_CHECK_FILE=$(mktemp)
+trap 'rm -f "$UPDATE_CHECK_FILE"' EXIT
+
 # Efficient version check using GitHub API (SHA comparison)
 check_for_updates() {
     # Get remote SHA from GitHub API (lightweight JSON response)
@@ -62,8 +66,7 @@ check_for_updates() {
         LOCAL_SHA=$(printf "blob %s\0" "$(wc -c < "$SCRIPT_PATH")" | cat - "$SCRIPT_PATH" | sha1sum | awk '{print $1}')
         
         if [[ -n "$LOCAL_SHA" ]] && [[ "$REMOTE_SHA" != "$LOCAL_SHA" ]]; then
-            log_warning "A newer version of this script is available!"
-            log_warning "Run 'sudo $0 --update' to update to the latest version"
+            echo "update_available" > "$UPDATE_CHECK_FILE"
         fi
     fi
 }
@@ -98,6 +101,7 @@ fi
 
 # Run version check in background to avoid delaying script execution (only during normal cleanup)
 check_for_updates &
+UPDATE_PID=$!
 
 
 
@@ -432,8 +436,16 @@ else
     log_info "Minimal or no space freed, this is normal if system was already clean"
 fi
 
-# Show current disk usage
 log_info "Current disk usage:"
 df -h / | awk -v blue="$BLUE" -v nc="$NC" 'NR==2 {printf "%s[INFO]%s   Used: %s / %s (%s)\n", blue, nc, $3, $2, $5}'
+
+# Check if update is available (wait for background check to finish)
+wait "$UPDATE_PID" 2>/dev/null || true
+if [[ -f "$UPDATE_CHECK_FILE" ]] && grep -q "update_available" "$UPDATE_CHECK_FILE"; then
+    echo ""
+    log_warning "A newer version of this script is available!"
+    log_warning "Run 'sudo $0 --update' to update to the latest version"
+    echo ""
+fi
 
 log_success "All cleanup tasks completed successfully!"
