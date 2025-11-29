@@ -239,14 +239,20 @@ fi
 # ============================================================================
 if command -v pip3 &> /dev/null; then
     log_info "Clearing pip3 cache..."
-    pip3 cache purge 2>/dev/null || log_warning "Pip cache cleanup had issues"
-    log_success "Pip3 cache cleared"
+    if pip3 cache purge 2>/dev/null; then
+        log_success "Pip3 cache cleared"
+    else
+        log_warning "Pip3 cache cleanup had issues"
+    fi
 fi
 
 if command -v pip &> /dev/null; then
     log_info "Clearing pip cache..."
-    pip cache purge 2>/dev/null || log_warning "Pip cache cleanup had issues"
-    log_success "Pip cache cleared"
+    if pip cache purge 2>/dev/null; then
+        log_success "Pip cache cleared"
+    else
+        log_warning "Pip cache cleanup had issues"
+    fi
 fi
 
 
