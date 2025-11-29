@@ -37,6 +37,7 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+
 # ============================================================================
 # Self-Update Feature
 # ============================================================================
@@ -104,13 +105,10 @@ log_info "Starting system cleanup..."
 # Get initial disk usage
 INITIAL_USAGE=$(df / | awk 'NR==2 {print $3}')
 
+
 # ============================================================================
 # APT Package Manager Cleanup
 # ============================================================================
-log_info "Updating package lists..."
-apt-get update -qq
-log_success "Package lists updated"
-
 log_info "Removing unnecessary packages (autoremove)..."
 apt-get -y autoremove --purge > /dev/null 2>&1
 log_success "Unnecessary packages removed"
@@ -152,9 +150,7 @@ log_success "Journal size limited"
 # Log Files Cleanup
 # ============================================================================
 log_info "Removing old rotated log files..."
-find /var/log -type f -name "*.gz" -delete 2>/dev/null || true
-find /var/log -type f -name "*.1" -delete 2>/dev/null || true
-find /var/log -type f -name "*.old" -delete 2>/dev/null || true
+find /var/log -type f \( -name "*.gz" -o -name "*.1" -o -name "*.old" \) -delete 2>/dev/null || true
 log_success "Removed old rotated logs"
 
 
@@ -294,34 +290,8 @@ for DIR in "${NPM_CACHE_DIRS[@]}"; do
     TOTAL_BEFORE=$((TOTAL_BEFORE + SIZE))
 done
 
-# npm cleanup (only if npm is installed)
-if command -v npm &> /dev/null; then
-    log_info "Clearing npm cache..."
-    npm cache clean --force 2>/dev/null || log_warning "NPM cache cleanup had issues"
-    log_success "NPM cache cleared"
-else
-    log_info "npm not installed, skipping npm cache cleanup"
-fi
-
-# yarn cleanup (only if yarn is installed)
-if command -v yarn &> /dev/null; then
-    log_info "Clearing yarn cache..."
-    yarn cache clean 2>/dev/null || log_warning "Yarn cache cleanup had issues"
-    log_success "Yarn cache cleared"
-else
-    log_info "yarn not installed, skipping yarn cache cleanup"
-fi
-
-# pnpm cleanup (only if pnpm is installed)
-if command -v pnpm &> /dev/null; then
-    log_info "Pruning pnpm store..."
-    pnpm store prune > /dev/null 2>&1 || log_warning "PNPM store prune had issues"
-    log_success "PNPM store pruned"
-else
-    log_info "pnpm not installed, skipping pnpm cleanup"
-fi
-
 # Clean npm-specific cache directories manually
+# (We use rm -rf because it is faster and more reliable than the package manager commands for cleanup)
 log_info "Removing package manager cache directories..."
 DIRS_REMOVED=0
 for DIR in "${NPM_CACHE_DIRS[@]}"; do
@@ -369,7 +339,6 @@ fi
 # ============================================================================
 if command -v docker &> /dev/null; then
     log_info "Docker detected - cleaning up unused containers and dangling images..."
-    # CHANGED: Removed -a (all images) and --volumes for safety.
     # Only removes stopped containers and dangling images.
     log_warning "This will remove all STOPPED containers. Running containers are safe."
     docker system prune -f 2>/dev/null || log_warning "Docker cleanup had issues"
