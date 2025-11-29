@@ -356,7 +356,8 @@ if command -v snap &> /dev/null; then
     # This loop removes disabled snaps (old versions)
     # Using process substitution to avoid subshell and maintain counter
     while read -r snapname revision; do
-        if snap remove "$snapname" --revision="$revision" 2>/dev/null; then
+        # Use timeout to prevent hanging on stuck snapd operations
+        if timeout 60s snap remove "$snapname" --revision="$revision" 2>/dev/null; then
             ((SNAP_COUNT++))
         fi
     done < <(snap list --all | awk '/disabled/{print $1, $3}')
@@ -411,9 +412,9 @@ fi
 # ============================================================================
 # Summary
 # ============================================================================
-log_info "${BLUE}═══════════════════════════════════════════════════════${NC}"
+log_info "${BLUE}=======================================================${NC}"
 log_info "                  Cleanup completed!"
-log_info "${BLUE}═══════════════════════════════════════════════════════${NC}"
+log_info "${BLUE}=======================================================${NC}"
 
 # Sync filesystem to ensure changes are written
 sync
