@@ -38,6 +38,12 @@ log_error() {
 }
 
 
+# Check if running as root
+if [[ $EUID -ne 0 ]]; then
+   log_error "This script must be run as root or with sudo"
+   exit 1
+fi
+
 # ============================================================================
 # Self-Update Feature
 # ============================================================================
@@ -93,11 +99,7 @@ fi
 # Run version check in background to avoid delaying script execution (only during normal cleanup)
 check_for_updates &
 
-# Check if running as root
-if [[ $EUID -ne 0 ]]; then
-   log_error "This script must be run as root or with sudo"
-   exit 1
-fi
+
 
 log_info "Starting system cleanup..."
 
