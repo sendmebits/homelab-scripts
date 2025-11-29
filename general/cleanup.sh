@@ -61,9 +61,6 @@ check_for_updates() {
     fi
 }
 
-# Run version check in background to avoid delaying script execution
-check_for_updates &
-
 if [[ "${1:-}" == "--update" ]]; then
     log_info "Updating cleanup.sh from GitHub..."
     
@@ -92,6 +89,9 @@ if [[ "${1:-}" == "--update" ]]; then
         exit 1
     fi
 fi
+
+# Run version check in background to avoid delaying script execution (only during normal cleanup)
+check_for_updates &
 
 # Check if running as root
 if [[ $EUID -ne 0 ]]; then
