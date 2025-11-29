@@ -464,6 +464,6 @@ fi
 
 # Show current disk usage
 log_info "Current disk usage:"
-df -h / | awk 'NR==1 {print $0} NR==2 {printf "  Used: %s / %s (%s)\n", $3, $2, $5}'
+df -h / | awk -v blue="$BLUE" -v nc="$NC" 'NR==1 {printf "%s[INFO]%s %s\n", blue, nc, $0} NR==2 {printf "%s[INFO]%s   Used: %s / %s (%s)\n", blue, nc, $3, $2, $5}'
 
 log_success "All cleanup tasks completed successfully!"
