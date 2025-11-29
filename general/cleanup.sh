@@ -62,7 +62,7 @@ check_for_updates() {
         
         if [[ -n "$LOCAL_SHA" ]] && [[ "$REMOTE_SHA" != "$LOCAL_SHA" ]]; then
             log_warning "A newer version of this script is available!"
-            log_info "Run 'sudo $0 --update' to update to the latest version"
+            log_warning "Run 'sudo $0 --update' to update to the latest version"
         fi
     fi
 }
@@ -449,9 +449,9 @@ fi
 # ============================================================================
 # Summary
 # ============================================================================
-log_info "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
-log_info "Cleanup completed!"
-log_info "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
+log_info "${BLUE}═══════════════════════════════════════════════════════${NC}"
+log_info "                  Cleanup completed!"
+log_info "${BLUE}═══════════════════════════════════════════════════════${NC}"
 
 # Sync filesystem to ensure changes are written
 sync
