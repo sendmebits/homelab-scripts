@@ -5,8 +5,7 @@
 #
 # Usage: sudo ./cleanup.sh
 # To update: sudo ./cleanup.sh --update
-# Updating refreshes with the latest updates from: 
-# https://raw.githubusercontent.com/sendmebits/homelab-scripts/refs/heads/main/general/cleanup.sh
+# Download: curl -fsSL https://raw.githubusercontent.com/sendmebits/homelab-scripts/refs/heads/main/general/cleanup.sh -o cleanup.sh && chmod +x cleanup.sh
 #
 # Author: sendmebits
 #
