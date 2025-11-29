@@ -70,18 +70,8 @@ fi
 log_info "Clearing downloaded package list files..."
 rm -rf /var/lib/apt/lists/*
 
-# ============================================================================
-# Old Kernel Cleanup
-# ============================================================================
-log_info "Removing old kernel versions (keeping current + 1 previous)..."
-CURRENT_KERNEL=$(uname -r | sed "s/\(.*\)-\([^0-9]\+\)/\1/")
-OLD_KERNELS=$(dpkg -l 'linux-*' | sed '/^ii/!d;/'"$CURRENT_KERNEL"'/d;s/^[^ ]* [^ ]* \([^ ]*\).*/\1/;/[0-9]/!d' | grep -E 'linux-(image|headers|modules)' || true)
-
-if [[ -n "$OLD_KERNELS" ]]; then
-    echo "$OLD_KERNELS" | xargs apt-get -y purge 2>/dev/null || log_warning "Some kernels could not be removed"
-    log_success "Removed old kernels"
-else
-    log_info "No old kernels to remove"
+if [ -f /var/run/reboot-required ]; then
+    log_warning "A system reboot is required! Newly installed kernels might not be active yet."
 fi
 
 # ============================================================================
@@ -121,19 +111,85 @@ if [[ -d /var/cache/man ]]; then
 fi
 
 # ============================================================================
-# Thumbnail Cache Cleanup
+# Trash/Recycle Bin Cleanup
 # ============================================================================
-log_info "Clearing thumbnail caches for all users..."
+log_info "Emptying trash for all users..."
+TRASH_CLEANED=0
 for user_home in /home/*; do
-    if [[ -d "$user_home/.cache/thumbnails" ]]; then
-        rm -rf "$user_home/.cache/thumbnails"/*
-        log_success "Cleared thumbnails for $(basename "$user_home")"
+    if [[ -d "$user_home/.local/share/Trash" ]]; then
+        rm -rf "$user_home/.local/share/Trash"/* 2>/dev/null || true
+        ((TRASH_CLEANED++))
     fi
 done
 
-# Clear root's thumbnail cache
-if [[ -d /root/.cache/thumbnails ]]; then
-    rm -rf /root/.cache/thumbnails/*
+# Clear root's trash
+if [[ -d /root/.local/share/Trash ]]; then
+    rm -rf /root/.local/share/Trash/* 2>/dev/null || true
+fi
+
+if [[ $TRASH_CLEANED -gt 0 ]]; then
+    log_success "Emptied trash for $TRASH_CLEANED user(s)"
+else
+    log_info "No trash to clean"
+fi
+
+# ============================================================================
+# Crash Reports Cleanup
+# ============================================================================
+if [[ -d /var/crash ]]; then
+    log_info "Removing old crash reports..."
+    CRASH_COUNT=$(find /var/crash -type f 2>/dev/null | wc -l)
+    if [[ $CRASH_COUNT -gt 0 ]]; then
+        rm -rf /var/crash/* 2>/dev/null || true
+        log_success "Removed $CRASH_COUNT crash report(s)"
+    else
+        log_info "No crash reports to remove"
+    fi
+fi
+
+# ============================================================================
+# APT Partial Downloads Cleanup
+# ============================================================================
+if [[ -d /var/cache/apt/archives/partial ]]; then
+    log_info "Clearing partial APT downloads..."
+    rm -rf /var/cache/apt/archives/partial/* 2>/dev/null || true
+    log_success "Cleared partial downloads"
+fi
+
+# ============================================================================
+# Python Pip Cache Cleanup
+# ============================================================================
+if command -v pip3 &> /dev/null; then
+    log_info "Clearing pip3 cache..."
+    pip3 cache purge 2>/dev/null || log_warning "Pip cache cleanup had issues"
+    log_success "Pip3 cache cleared"
+fi
+
+if command -v pip &> /dev/null; then
+    log_info "Clearing pip cache..."
+    pip cache purge 2>/dev/null || log_warning "Pip cache cleanup had issues"
+    log_success "Pip cache cleared"
+fi
+
+# ============================================================================
+# NPM Cache Cleanup (if Node.js is installed)
+# ============================================================================
+if command -v npm &> /dev/null; then
+    log_info "Clearing npm cache..."
+    npm cache clean --force 2>/dev/null || log_warning "NPM cache cleanup had issues"
+    log_success "NPM cache cleared"
+fi
+
+# ============================================================================
+# Reset Failed Systemd Units
+# ============================================================================
+log_info "Resetting failed systemd units..."
+FAILED_COUNT=$(systemctl list-units --state=failed --no-legend 2>/dev/null | wc -l)
+if [[ $FAILED_COUNT -gt 0 ]]; then
+    systemctl reset-failed 2>/dev/null || true
+    log_success "Reset $FAILED_COUNT failed systemd unit(s)"
+else
+    log_info "No failed systemd units to reset"
 fi
 
 # ============================================================================
@@ -143,6 +199,7 @@ if command -v docker &> /dev/null; then
     log_info "Docker detected - cleaning up unused containers and dangling images..."
     # CHANGED: Removed -a (all images) and --volumes for safety.
     # Only removes stopped containers and dangling images.
+    log_warning "This will remove all STOPPED containers. Running containers are safe."
     docker system prune -f 2>/dev/null || log_warning "Docker cleanup had issues"
     log_success "Docker cleanup completed"
 else
@@ -156,10 +213,18 @@ if command -v snap &> /dev/null; then
     log_info "Snap detected - removing old snap revisions..."
     SNAP_COUNT=0
     # This loop removes disabled snaps (old versions)
-    snap list --all | awk '/disabled/{print $1, $3}' | while read -r snapname revision; do
-        snap remove "$snapname" --revision="$revision" 2>/dev/null && ((SNAP_COUNT++)) || true
-    done
-    log_success "Removed old snap revisions"
+    # Using process substitution to avoid subshell and maintain counter
+    while read -r snapname revision; do
+        if snap remove "$snapname" --revision="$revision" 2>/dev/null; then
+            ((SNAP_COUNT++))
+        fi
+    done < <(snap list --all | awk '/disabled/{print $1, $3}')
+    
+    if [[ $SNAP_COUNT -gt 0 ]]; then
+        log_success "Removed $SNAP_COUNT old snap revision(s)"
+    else
+        log_info "No old snap revisions to remove"
+    fi
 else
     log_info "Snap not installed, skipping snap cleanup"
 fi
