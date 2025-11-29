@@ -51,8 +51,14 @@ check_for_updates() {
     REMOTE_SHA=$(curl -fsSL --max-time 2 "$GITHUB_API_URL" 2>/dev/null | grep -o '"sha": "[^"]*"' | head -1 | cut -d'"' -f4)
     
     if [[ -n "$REMOTE_SHA" ]]; then
-        # Calculate local file SHA (same algorithm GitHub uses: blob + size + content)
-        LOCAL_SHA=$(git hash-object "$SCRIPT_PATH" 2>/dev/null || sha1sum "$SCRIPT_PATH" 2>/dev/null | awk '{print $1}')
+        # Calculate local file SHA using git blob format (same as GitHub)
+        # Git blob SHA = sha1("blob " + filesize + "\0" + contents)
+        if command -v git &> /dev/null; then
+            LOCAL_SHA=$(git hash-object "$SCRIPT_PATH" 2>/dev/null)
+        else
+            # Manual git blob hash calculation when git is not available
+            LOCAL_SHA=$(printf "blob %s\0" "$(wc -c < "$SCRIPT_PATH")" | cat - "$SCRIPT_PATH" | sha1sum | awk '{print $1}')
+        fi
         
         if [[ -n "$LOCAL_SHA" ]] && [[ "$REMOTE_SHA" != "$LOCAL_SHA" ]]; then
             log_warning "A newer version of this script is available!"
@@ -443,10 +449,9 @@ fi
 # ============================================================================
 # Summary
 # ============================================================================
-echo ""
-echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
+log_info "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
 log_info "Cleanup completed!"
-echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
+log_info "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
 
 # Sync filesystem to ensure changes are written
 sync
