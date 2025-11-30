@@ -40,7 +40,6 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-
 # Check if running as root
 if [[ $EUID -ne 0 ]]; then
    log_error "This script must be run as root or with sudo"
