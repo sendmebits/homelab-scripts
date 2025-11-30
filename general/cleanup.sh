@@ -5,9 +5,11 @@
 #
 # Usage:
 #   > sudo ./cleanup.sh
+#
 # To update: 
 #   > sudo ./cleanup.sh --update
-# Download: 
+#
+# Manual download: 
 #   > curl -fsSL https://raw.githubusercontent.com/sendmebits/homelab-scripts/refs/heads/main/general/cleanup.sh -o cleanup.sh && chmod +x cleanup.sh
 #
 # Author: sendmebits
@@ -403,14 +405,14 @@ fi
 # Temporary Files Cleanup
 # ============================================================================
 log_info "Cleaning old temporary files (older than 7 days)..."
-find /tmp -type f -atime +7 -delete 2>/dev/null || true
-find /tmp -type d -empty -delete 2>/dev/null || true
+find /tmp -mindepth 1 -type f -atime +7 -delete 2>/dev/null || true
+find /tmp -mindepth 1 -type d -empty -delete 2>/dev/null || true
 log_success "Cleaned old temporary files"
 
 # Clean /var/tmp as well
 log_info "Cleaning old /var/tmp files (older than 7 days)..."
-find /var/tmp -type f -atime +7 -delete 2>/dev/null || true
-find /var/tmp -type d -empty -delete 2>/dev/null || true
+find /var/tmp -mindepth 1 -type f -atime +7 -delete 2>/dev/null || true
+find /var/tmp -mindepth 1 -type d -empty -delete 2>/dev/null || true
 log_success "Cleaned old /var/tmp files"
 
 
