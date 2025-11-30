@@ -1,16 +1,14 @@
 #!/bin/bash
 #
 # General Linux cleanup script for Debian/Ubuntu
-# Performs comprehensive system cleanup with safety checks
+# Performs comprehensive system cleanup with safety checks.
 #
 # Usage:
-#   > sudo ./cleanup.sh
+#   sudo ./cleanup.sh
+#   sudo ./cleanup.sh --update
 #
-# To update: 
-#   > sudo ./cleanup.sh --update
-#
-# Manual download: 
-#   > curl -fsSL https://raw.githubusercontent.com/sendmebits/homelab-scripts/refs/heads/main/general/cleanup.sh -o cleanup.sh && chmod +x cleanup.sh
+# Manual download:
+#   curl -fsSL https://raw.githubusercontent.com/sendmebits/homelab-scripts/refs/heads/main/general/cleanup.sh -o cleanup.sh && chmod +x cleanup.sh
 #
 # Author: sendmebits
 #
@@ -244,7 +242,8 @@ fi
 # ============================================================================
 if command -v pip3 &> /dev/null; then
     log_info "Clearing pip3 cache..."
-    if pip3 cache purge 2>/dev/null; then
+    pip3 cache purge 2>/dev/null | while read -r line; do log_info "$line"; done
+    if [ "${PIPESTATUS[0]}" -eq 0 ]; then
         log_success "Pip3 cache cleared"
     else
         log_warning "Pip3 cache cleanup had issues"
@@ -253,7 +252,8 @@ fi
 
 if command -v pip &> /dev/null; then
     log_info "Clearing pip cache..."
-    if pip cache purge 2>/dev/null; then
+    pip cache purge 2>/dev/null | while read -r line; do log_info "$line"; done
+    if [ "${PIPESTATUS[0]}" -eq 0 ]; then
         log_success "Pip cache cleared"
     else
         log_warning "Pip cache cleanup had issues"
@@ -357,7 +357,10 @@ if command -v docker &> /dev/null; then
     log_info "Docker detected - cleaning up unused containers and dangling images..."
     # Only removes stopped containers and dangling images.
     log_warning "This will remove all STOPPED containers. Running containers are safe."
-    docker system prune -f 2>/dev/null || log_warning "Docker cleanup had issues"
+    docker system prune -f 2>/dev/null | while read -r line; do log_info "$line"; done
+    if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+        log_warning "Docker cleanup had issues"
+    fi
     log_success "Docker cleanup completed"
 else
     log_info "Docker not installed, skipping Docker cleanup"
@@ -374,7 +377,8 @@ if command -v snap &> /dev/null; then
     # Using process substitution to avoid subshell and maintain counter
     while read -r snapname revision; do
         # Use timeout to prevent hanging on stuck snapd operations
-        if timeout 60s snap remove "$snapname" --revision="$revision" 2>/dev/null; then
+        timeout 60s snap remove "$snapname" --revision="$revision" 2>/dev/null | while read -r line; do log_info "$line"; done
+        if [ "${PIPESTATUS[0]}" -eq 0 ]; then
             ((SNAP_COUNT++))
         fi
     done < <(snap list --all | awk '/disabled/{print $1, $3}')
@@ -394,7 +398,10 @@ fi
 # ============================================================================
 if command -v flatpak &> /dev/null; then
     log_info "Flatpak detected - removing unused runtimes..."
-    flatpak uninstall --unused -y 2>/dev/null || log_warning "Flatpak cleanup had issues"
+    flatpak uninstall --unused -y 2>/dev/null | while read -r line; do log_info "$line"; done
+    if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+        log_warning "Flatpak cleanup had issues"
+    fi
     log_success "Flatpak cleanup completed"
 else
     log_info "Flatpak not installed, skipping flatpak cleanup"
@@ -421,7 +428,7 @@ log_success "Cleaned old /var/tmp files"
 # ============================================================================
 if command -v localepurge &> /dev/null; then
     log_info "localepurge detected - removing unused locales..."
-    localepurge 2>/dev/null || true
+    localepurge 2>/dev/null | while read -r line; do log_info "$line"; done || true
     log_success "Unused locales removed"
 fi
 
@@ -429,9 +436,9 @@ fi
 # ============================================================================
 # Summary
 # ============================================================================
-log_info "${BLUE}=======================================================${NC}"
+log_info "${BLUE}═══════════════════════════════════════════════════════${NC}"
 log_info "                  Cleanup completed!"
-log_info "${BLUE}=======================================================${NC}"
+log_info "${BLUE}═══════════════════════════════════════════════════════${NC}"
 
 # Sync filesystem to ensure changes are written
 sync
