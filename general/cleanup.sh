@@ -76,12 +76,7 @@ check_for_updates() {
 
 if [[ "${1:-}" == "--update" ]]; then
     log_info "Updating cleanup.sh from GitHub..."
-    
-    # Create a backup (overwrites previous backup if it exists)
-    BACKUP_PATH="${SCRIPT_PATH}.backup"
-    cp "$SCRIPT_PATH" "$BACKUP_PATH"
-    log_info "Created backup at: $BACKUP_PATH"
-    
+     
     # Download the latest version
     if curl -fsSL "$SCRIPT_URL" -o "${SCRIPT_PATH}.tmp"; then
         # Verify the downloaded file is not empty and starts with shebang
@@ -105,8 +100,6 @@ fi
 # Run version check in background to avoid delaying script execution (only during normal cleanup)
 check_for_updates &
 UPDATE_PID=$!
-
-
 
 log_info "Starting system cleanup..."
 
