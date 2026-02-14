@@ -257,6 +257,32 @@ fi
 
 
 # ============================================================================
+# Mail Spool Cleanup
+# ============================================================================
+log_info "Checking for stale mail spool files..."
+MAIL_CLEANED=false
+for MAIL_FILE in /var/spool/mail/*; do
+    if [[ -f "$MAIL_FILE" ]]; then
+        MAIL_SIZE=$(stat -c%s "$MAIL_FILE" 2>/dev/null || echo "0")
+        if [[ $MAIL_SIZE -gt 0 ]]; then
+            MAIL_SIZE_MB=$((MAIL_SIZE / 1048576))
+            MAIL_USER=$(basename "$MAIL_FILE")
+            truncate -s 0 "$MAIL_FILE" 2>/dev/null || true
+            if [[ $MAIL_SIZE_MB -gt 0 ]]; then
+                log_success "Truncated ${MAIL_SIZE_MB}MB mail spool for user '$MAIL_USER'"
+            else
+                log_success "Truncated mail spool for user '$MAIL_USER' (<1MB)"
+            fi
+            MAIL_CLEANED=true
+        fi
+    fi
+done
+if [[ "$MAIL_CLEANED" != "true" ]]; then
+    log_info "No stale mail to clean"
+fi
+
+
+# ============================================================================
 # Trash/Recycle Bin Cleanup
 # ============================================================================
 log_info "Emptying trash for all users..."
