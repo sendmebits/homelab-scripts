@@ -59,15 +59,18 @@ trap 'rm -f "$UPDATE_CHECK_FILE"' EXIT
 
 # Efficient version check using GitHub API (SHA comparison)
 check_for_updates() {
-    # Get remote SHA from GitHub API (lightweight JSON response)
-    REMOTE_SHA=$(curl -fsSL --max-time 2 "$GITHUB_API_URL" 2>/dev/null | grep -o '"sha": "[^"]*"' | head -1 | cut -d'"' -f4)
-    
-    if [[ -n "$REMOTE_SHA" ]]; then
-        # Calculate local file SHA using git blob format (same as GitHub)
-        # Git blob SHA = sha1("blob " + filesize + "\0" + contents)
-        LOCAL_SHA=$(printf "blob %s\0" "$(wc -c < "$SCRIPT_PATH")" | cat - "$SCRIPT_PATH" | sha1sum | awk '{print $1}')
-        
-        if [[ -n "$LOCAL_SHA" ]] && [[ "$REMOTE_SHA" != "$LOCAL_SHA" ]]; then
+    if command -v git &>/dev/null; then
+        # Preferred: use git hash-object for reliable blob SHA computation
+        LOCAL_SHA=$(git hash-object "$SCRIPT_PATH" 2>/dev/null)
+        REMOTE_SHA=$(curl -fsSL --max-time 3 "$GITHUB_API_URL" 2>/dev/null | grep -o '"sha": *"[^"]*"' | head -1 | cut -d'"' -f4)
+        if [[ -n "$REMOTE_SHA" ]] && [[ -n "$LOCAL_SHA" ]] && [[ "$REMOTE_SHA" != "$LOCAL_SHA" ]]; then
+            echo "update_available" > "$UPDATE_CHECK_FILE"
+        fi
+    else
+        # Fallback: download remote file and compare sha256 checksums
+        REMOTE_HASH=$(curl -fsSL --max-time 5 "$SCRIPT_URL" 2>/dev/null | sha256sum | awk '{print $1}')
+        LOCAL_HASH=$(sha256sum "$SCRIPT_PATH" 2>/dev/null | awk '{print $1}')
+        if [[ -n "$REMOTE_HASH" ]] && [[ -n "$LOCAL_HASH" ]] && [[ "$REMOTE_HASH" != "$LOCAL_HASH" ]]; then
             echo "update_available" > "$UPDATE_CHECK_FILE"
         fi
     fi
