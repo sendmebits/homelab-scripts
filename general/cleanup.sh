@@ -109,9 +109,26 @@ INITIAL_USAGE=$(df / | awk 'NR==2 {print $3}')
 # ============================================================================
 # APT Package Manager Cleanup
 # ============================================================================
-log_info "Removing unnecessary packages (autoremove)..."
-apt-get -y autoremove --purge > /dev/null 2>&1
-log_success "Unnecessary packages removed"
+# Wait for apt lock if another process (e.g. unattended-upgrades) holds it
+log_info "Checking for apt lock..."
+APT_LOCK_WAIT=0
+while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
+    if [[ $APT_LOCK_WAIT -eq 0 ]]; then
+        log_warning "APT is locked by another process, waiting..."
+    fi
+    sleep 5
+    ((APT_LOCK_WAIT+=5)) || true
+    if [[ $APT_LOCK_WAIT -ge 120 ]]; then
+        log_error "APT lock not released after 120 seconds, skipping APT cleanup"
+        break
+    fi
+done
+
+if [[ $APT_LOCK_WAIT -lt 120 ]]; then
+    log_info "Removing unnecessary packages (autoremove)..."
+    apt-get -y autoremove --purge > /dev/null 2>&1 || log_warning "autoremove encountered issues"
+    log_success "Unnecessary packages removed"
+fi
 
 log_info "Cleaning apt cache..."
 apt-get -y clean
@@ -132,6 +149,14 @@ log_success "Package list files cleared"
 
 if [ -f /var/run/reboot-required ]; then
     log_warning "A system reboot is required! Newly installed kernels might not be active yet."
+fi
+
+# Show installed kernel count for awareness
+KERNEL_COUNT=$(dpkg -l 'linux-image-*' 2>/dev/null | grep -c '^ii' || echo "0")
+if [[ $KERNEL_COUNT -gt 2 ]]; then
+    CURRENT_KERNEL=$(uname -r)
+    log_warning "$KERNEL_COUNT kernel images installed (running: $CURRENT_KERNEL)"
+    log_info "If autoremove didn't clean old kernels, check: dpkg -l 'linux-image-*'"
 fi
 
 # ============================================================================
@@ -179,6 +204,55 @@ fi
 
 
 # ============================================================================
+# User Cache Cleanup
+# ============================================================================
+log_info "Cleaning user cache directories (files older than 30 days)..."
+CACHE_CLEANED=0
+for user_home in /home/* /root; do
+    if [[ -d "$user_home/.cache" ]]; then
+        # Clean old cache files but preserve directory structure
+        CACHE_SIZE_BEFORE=$(du -sk "$user_home/.cache" 2>/dev/null | awk '{print $1}')
+        find "$user_home/.cache" -mindepth 1 -type f -atime +30 -delete 2>/dev/null || true
+        find "$user_home/.cache" -mindepth 1 -type d -empty -delete 2>/dev/null || true
+        CACHE_SIZE_AFTER=$(du -sk "$user_home/.cache" 2>/dev/null | awk '{print $1}')
+        CACHE_DIFF=$((${CACHE_SIZE_BEFORE:-0} - ${CACHE_SIZE_AFTER:-0}))
+        if [[ $CACHE_DIFF -gt 0 ]]; then
+            ((CACHE_CLEANED += CACHE_DIFF)) || true
+        fi
+    fi
+done
+if [[ $CACHE_CLEANED -gt 1024 ]]; then
+    CACHE_CLEANED_MB=$((CACHE_CLEANED / 1024))
+    log_success "Cleaned ${CACHE_CLEANED_MB}MB from user cache directories"
+else
+    log_info "No significant cache to clean"
+fi
+
+
+# ============================================================================
+# Thumbnail Cache Cleanup
+# ============================================================================
+log_info "Cleaning thumbnail caches..."
+THUMBNAILS_CLEANED=false
+for user_home in /home/* /root; do
+    if [[ -d "$user_home/.cache/thumbnails" ]]; then
+        rm -rf "$user_home/.cache/thumbnails"/* 2>/dev/null || true
+        THUMBNAILS_CLEANED=true
+    fi
+    # Also check legacy thumbnail location
+    if [[ -d "$user_home/.thumbnails" ]]; then
+        rm -rf "$user_home/.thumbnails"/* 2>/dev/null || true
+        THUMBNAILS_CLEANED=true
+    fi
+done
+if [[ "$THUMBNAILS_CLEANED" == "true" ]]; then
+    log_success "Thumbnail caches cleaned"
+else
+    log_info "No thumbnail caches found"
+fi
+
+
+# ============================================================================
 # Trash/Recycle Bin Cleanup
 # ============================================================================
 log_info "Emptying trash for all users..."
@@ -186,7 +260,7 @@ TRASH_CLEANED=0
 for user_home in /home/*; do
     if [[ -d "$user_home/.local/share/Trash" ]]; then
         rm -rf "$user_home/.local/share/Trash"/* 2>/dev/null || true
-        ((TRASH_CLEANED++))
+        ((TRASH_CLEANED++)) || true
     fi
 done
 
@@ -354,6 +428,27 @@ if command -v docker &> /dev/null; then
         log_warning "Docker cleanup had issues"
     fi
     log_success "Docker cleanup completed"
+
+    # Truncate Docker container logs (these are NOT cleaned by docker system prune)
+    log_info "Truncating Docker container logs..."
+    DOCKER_LOG_FREED=0
+    if [[ -d /var/lib/docker/containers ]]; then
+        for LOG_FILE in /var/lib/docker/containers/*/*-json.log; do
+            if [[ -f "$LOG_FILE" ]]; then
+                LOG_SIZE=$(stat -c%s "$LOG_FILE" 2>/dev/null || echo "0")
+                if [[ $LOG_SIZE -gt 1048576 ]]; then  # Only truncate if > 1MB
+                    DOCKER_LOG_FREED=$((DOCKER_LOG_FREED + LOG_SIZE))
+                    truncate -s 0 "$LOG_FILE" 2>/dev/null || true
+                fi
+            fi
+        done
+    fi
+    if [[ $DOCKER_LOG_FREED -gt 0 ]]; then
+        DOCKER_LOG_FREED_MB=$((DOCKER_LOG_FREED / 1048576))
+        log_success "Truncated Docker container logs, freed approximately ${DOCKER_LOG_FREED_MB}MB"
+    else
+        log_info "No large Docker container logs to truncate"
+    fi
 else
     log_info "Docker not installed, skipping Docker cleanup"
 fi
@@ -371,7 +466,7 @@ if command -v snap &> /dev/null; then
         # Use timeout to prevent hanging on stuck snapd operations
         timeout 60s snap remove "$snapname" --revision="$revision" 2>/dev/null | while read -r line; do log_info "$line"; done
         if [ "${PIPESTATUS[0]}" -eq 0 ]; then
-            ((SNAP_COUNT++))
+            ((SNAP_COUNT++)) || true
         fi
     done < <(snap list --all | awk '/disabled/{print $1, $3}')
     
@@ -439,12 +534,16 @@ sync
 FINAL_USAGE=$(df / | awk 'NR==2 {print $3}')
 SPACE_FREED=$((INITIAL_USAGE - FINAL_USAGE))
 
-SPACE_FREED_HUMAN=$(echo "$SPACE_FREED" | awk '{
-    if ($1 >= 1048576) printf "%.2fG", $1/1048576;
-    else if ($1 >= 1024) printf "%.2fM", $1/1024;
-    else printf "%dK", $1
-}')
-log_success "Freed approximately $SPACE_FREED_HUMAN of disk space"
+if [[ $SPACE_FREED -le 0 ]]; then
+    log_info "No net disk space freed (background processes may have allocated space during cleanup)"
+else
+    SPACE_FREED_HUMAN=$(echo "$SPACE_FREED" | awk '{
+        if ($1 >= 1048576) printf "%.2fG", $1/1048576;
+        else if ($1 >= 1024) printf "%.2fM", $1/1024;
+        else printf "%dK", $1
+    }')
+    log_success "Freed approximately $SPACE_FREED_HUMAN of disk space"
+fi
 
 log_info "Current disk usage:"
 df -h / | awk -v blue="$BLUE" -v nc="$NC" 'NR==2 {printf "%s[INFO]%s   Used: %s / %s (%s)\n", blue, nc, $3, $2, $5}'
