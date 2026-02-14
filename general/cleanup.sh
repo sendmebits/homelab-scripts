@@ -152,7 +152,8 @@ if [ -f /var/run/reboot-required ]; then
 fi
 
 # Show installed kernel count for awareness
-KERNEL_COUNT=$(dpkg -l 'linux-image-*' 2>/dev/null | grep -c '^ii' || echo "0")
+KERNEL_COUNT=$(dpkg -l 'linux-image-*' 2>/dev/null | grep -c '^ii' || true)
+KERNEL_COUNT=${KERNEL_COUNT:-0}
 if [[ $KERNEL_COUNT -gt 2 ]]; then
     CURRENT_KERNEL=$(uname -r)
     log_warning "$KERNEL_COUNT kernel images installed (running: $CURRENT_KERNEL)"
