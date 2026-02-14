@@ -234,6 +234,19 @@ fi
 
 
 # ============================================================================
+# Build Cache Cleanup (/usr/local/share/.cache)
+# ============================================================================
+if [[ -d /usr/local/share/.cache ]]; then
+    BUILD_CACHE_SIZE=$(du -sm /usr/local/share/.cache 2>/dev/null | awk '{print $1}')
+    if [[ ${BUILD_CACHE_SIZE:-0} -gt 0 ]]; then
+        log_info "Removing build cache (/usr/local/share/.cache - ${BUILD_CACHE_SIZE}MB)..."
+        rm -rf /usr/local/share/.cache
+        log_success "Removed ${BUILD_CACHE_SIZE}MB build cache (yarn/node-gyp/pip artifacts)"
+    fi
+fi
+
+
+# ============================================================================
 # Thumbnail Cache Cleanup
 # ============================================================================
 log_info "Cleaning thumbnail caches..."
