@@ -55,15 +55,15 @@ function shell_ls_settings {
     # Function to check and handle 'll' alias
     handle_ll_alias() {
         # Check if 'll' alias exists, allowing leading whitespace
-        if grep -Pq '\s*alias ll=' "$HOME/.bashrc"; then
+        if grep -Eq '^[[:space:]]*alias ll=' "$HOME/.bashrc"; then
             # Check if it's exactly the desired alias
-            if grep -Pq "alias ll='ls \\\$LS_OPTIONS -al'" "$HOME/.bashrc"; then
+            if grep -Fq "alias ll='ls \$LS_OPTIONS -al'" "$HOME/.bashrc"; then
                 # Alias already exists exactly as desired
                 return 0
             fi
 
             # If not an exact match, comment out and add new
-            sed -i.bak '/^\s*alias ll=.*/s/^/# /' "$HOME/.bashrc"
+            sed -i.bak '/^[[:space:]]*alias ll=.*/s/^/# /' "$HOME/.bashrc"
             
             # Add new 'll' alias at the end
             echo "" >> "$HOME/.bashrc"
@@ -86,15 +86,15 @@ function shell_ls_settings {
     # Function to check and handle 'l' alias
     handle_l_alias() {
         # Check if 'l' alias exists, allowing leading whitespace
-        if grep -Pq '\s*alias l=' "$HOME/.bashrc"; then
+        if grep -Eq '^[[:space:]]*alias l=' "$HOME/.bashrc"; then
             # Check if it's exactly the desired alias
-            if grep -Pq "alias l='ls \\\$LS_OPTIONS -og'" "$HOME/.bashrc"; then
+            if grep -Fq "alias l='ls \$LS_OPTIONS -og'" "$HOME/.bashrc"; then
                 # Alias already exists exactly as desired
                 return 0
             fi
 
             # If not an exact match, comment out and add new
-            sed -i.bak '/^\s*alias l=.*/s/^/# /' "$HOME/.bashrc"
+            sed -i.bak '/^[[:space:]]*alias l=.*/s/^/# /' "$HOME/.bashrc"
             
             # Add new 'l' alias at the end
             echo "" >> "$HOME/.bashrc"
@@ -106,7 +106,7 @@ function shell_ls_settings {
         else
             # 'l' alias doesn't exist, add it
             echo "" >> "$HOME/.bashrc"
-            echo "# Custom l' alias" >> "$HOME/.bashrc"
+            echo "# Custom l alias" >> "$HOME/.bashrc"
             echo "$ALIAS_L" >> "$HOME/.bashrc"
             
             echo "Added 'l' alias in $HOME/.bashrc"
