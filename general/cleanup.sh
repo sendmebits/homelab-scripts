@@ -106,7 +106,8 @@ UPDATE_PID=$!
 log_info "Starting system cleanup..."
 
 # Get initial disk usage
-INITIAL_USAGE=$(df / | awk 'NR==2 {print $3}')
+# -Pk keeps output on one line (long device names wrap otherwise) and pins 1K blocks
+INITIAL_USAGE=$(df -Pk / | awk 'NR==2 {print $3}')
 
 
 # ============================================================================
@@ -174,8 +175,8 @@ log_success "Journal size limited"
 # ============================================================================
 # Log Files Cleanup
 # ============================================================================
-log_info "Removing old rotated log files..."
-find /var/log -type f \( -name "*.gz" -o -name "*.1" -o -name "*.old" \) -delete 2>/dev/null || true
+log_info "Removing rotated log files older than 2 days..."
+find /var/log -type f \( -name "*.gz" -o -name "*.1" -o -name "*.old" \) -mtime +2 -delete 2>/dev/null || true
 log_success "Removed old rotated logs"
 
 
@@ -372,22 +373,23 @@ fi
 log_info "Checking for Node.js package manager caches..."
 
 # Define npm-specific directories to clean
+# HOME is unset under cron and bare systemd units, where set -u would abort the script.
+# Entries must not nest inside one another, or sizes get double counted below.
+ROOT_HOME="${HOME:-/root}"
 NPM_CACHE_DIRS=(
-"$HOME/.npm"
-"$HOME/.npm/_logs"
-"$HOME/.yarn/cache"
-"$HOME/.pnpm-store"
-"$HOME/.local/share/pnpm/store"
-"$HOME/Library/Caches/yarn"
-"$HOME/Library/Caches/pnpm"
+"$ROOT_HOME/.npm"
+"$ROOT_HOME/.yarn/cache"
+"$ROOT_HOME/.pnpm-store"
+"$ROOT_HOME/.local/share/pnpm/store"
+"$ROOT_HOME/Library/Caches/yarn"
+"$ROOT_HOME/Library/Caches/pnpm"
 )
 
-# Also check for all user home directories
+# Also check for all user home directories, skipping HOME as it is already listed above
 for user_home in /home/*; do
-    if [[ -d "$user_home" ]]; then
+    if [[ -d "$user_home" ]] && [[ "$user_home" != "$ROOT_HOME" ]]; then
         NPM_CACHE_DIRS+=(
             "$user_home/.npm"
-            "$user_home/.npm/_logs"
             "$user_home/.yarn/cache"
             "$user_home/.pnpm-store"
             "$user_home/.local/share/pnpm/store"
@@ -570,7 +572,7 @@ log_info "${BLUE}═════════════════════
 sync
 
 # Calculate space freed
-FINAL_USAGE=$(df / | awk 'NR==2 {print $3}')
+FINAL_USAGE=$(df -Pk / | awk 'NR==2 {print $3}')
 SPACE_FREED=$((INITIAL_USAGE - FINAL_USAGE))
 
 if [[ $SPACE_FREED -le 0 ]]; then
@@ -585,7 +587,7 @@ else
 fi
 
 log_info "Current disk usage:"
-df -h / | awk -v blue="$BLUE" -v nc="$NC" 'NR==2 {printf "%s[INFO]%s   Used: %s / %s (%s)\n", blue, nc, $3, $2, $5}'
+df -Ph / | awk -v blue="$BLUE" -v nc="$NC" 'NR==2 {printf "%s[INFO]%s   Used: %s / %s (%s)\n", blue, nc, $3, $2, $5}'
 
 # Check if update is available (wait for background check to finish)
 wait "$UPDATE_PID" 2>/dev/null || true
