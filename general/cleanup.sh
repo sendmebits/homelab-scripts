@@ -164,12 +164,18 @@ fi
 # Systemd Journal Cleanup
 # ============================================================================
 log_info "Truncating systemd journal logs (keeping last 7 days)..."
-journalctl --vacuum-time=7d >/dev/null 2>&1
-log_success "Journal logs truncated"
+if journalctl --vacuum-time=7d >/dev/null 2>&1; then
+    log_success "Journal logs truncated"
+else
+    log_warning "Could not truncate journal logs (journalctl unavailable or failed)"
+fi
 
 log_info "Limiting journal size to 100MB..."
-journalctl --vacuum-size=100M >/dev/null 2>&1
-log_success "Journal size limited"
+if journalctl --vacuum-size=100M >/dev/null 2>&1; then
+    log_success "Journal size limited"
+else
+    log_warning "Could not limit journal size (journalctl unavailable or failed)"
+fi
 
 
 # ============================================================================
