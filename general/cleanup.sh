@@ -112,36 +112,32 @@ INITIAL_USAGE=$(df / | awk 'NR==2 {print $3}')
 # ============================================================================
 # APT Package Manager Cleanup
 # ============================================================================
-# Wait for apt lock if another process (e.g. unattended-upgrades) holds it
-log_info "Checking for apt lock..."
-APT_LOCK_WAIT=0
-while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
-    if [[ $APT_LOCK_WAIT -eq 0 ]]; then
-        log_warning "APT is locked by another process, waiting..."
-    fi
-    sleep 5
-    ((APT_LOCK_WAIT+=5)) || true
-    if [[ $APT_LOCK_WAIT -ge 120 ]]; then
-        log_error "APT lock not released after 120 seconds, skipping APT cleanup"
-        break
-    fi
-done
+# Let apt wait for its own locks rather than polling with fuser, which covers every
+# lock apt takes and works without psmisc installed. Ignored by apt older than 2.1.5.
+APT_OPTS=(-o DPkg::Lock::Timeout=120)
 
-if [[ $APT_LOCK_WAIT -lt 120 ]]; then
-    log_info "Removing unnecessary packages (autoremove)..."
-    apt-get -y autoremove --purge > /dev/null 2>&1 || log_warning "autoremove encountered issues"
+log_info "Removing unnecessary packages (autoremove)..."
+if apt-get "${APT_OPTS[@]}" -y autoremove --purge > /dev/null 2>&1; then
     log_success "Unnecessary packages removed"
+else
+    log_warning "Autoremove encountered issues (apt may be locked by another process)"
 fi
 
 log_info "Cleaning apt cache..."
-apt-get -y clean
-log_success "APT cache cleaned"
+if apt-get "${APT_OPTS[@]}" -y clean; then
+    log_success "APT cache cleaned"
+else
+    log_warning "Could not clean APT cache (apt may be locked by another process)"
+fi
 
 log_info "Purging packages in 'rc' state (removed but config remains)..."
 RC_PACKAGES=$(dpkg -l | awk '/^rc/ {print $2}')
 if [[ -n "$RC_PACKAGES" ]]; then
-    echo "$RC_PACKAGES" | xargs apt-get -y purge
-    log_success "Purged residual config packages"
+    if echo "$RC_PACKAGES" | xargs apt-get "${APT_OPTS[@]}" -y purge; then
+        log_success "Purged residual config packages"
+    else
+        log_warning "Could not purge residual config packages (apt may be locked)"
+    fi
 else
     log_info "No residual config packages found"
 fi
