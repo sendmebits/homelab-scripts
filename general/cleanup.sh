@@ -40,6 +40,24 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# True when running inside a Proxmox LXC guest (not the PVE host).
+is_proxmox_lxc() {
+    # Host-side trim is handled by proxmox/disk-lxk-trim.sh
+    if command -v pveversion &>/dev/null || [[ -d /etc/pve ]]; then
+        return 1
+    fi
+    if command -v systemd-detect-virt &>/dev/null; then
+        if [[ "$(systemd-detect-virt 2>/dev/null || true)" == "lxc" ]]; then
+            return 0
+        fi
+        return 1
+    fi
+    if grep -qa 'container=lxc' /proc/1/environ 2>/dev/null; then
+        return 0
+    fi
+    return 1
+}
+
 # Check if running as root
 if [[ $EUID -ne 0 ]]; then
    log_error "This script must be run as root or with sudo"
@@ -564,6 +582,35 @@ if command -v localepurge &> /dev/null; then
     log_info "localepurge detected - removing unused locales..."
     localepurge 2>/dev/null | while read -r line; do log_info "$line"; done || true
     log_success "Unused locales removed"
+fi
+
+
+# ============================================================================
+# LXC Disk Trim (Proxmox guests)
+# ============================================================================
+# Discard unused blocks so thin-provisioned storage can reclaim space.
+# Guest df usually does not change; space returns to the storage pool.
+if is_proxmox_lxc; then
+    log_info "Proxmox LXC detected - syncing and trimming unused disk blocks..."
+    sync
+    if ! command -v fstrim &>/dev/null; then
+        log_warning "fstrim not found (install util-linux); skipping trim"
+    else
+        FSTRIM_RC=0
+        FSTRIM_OUTPUT=$(fstrim -av 2>&1) || FSTRIM_RC=$?
+        if [[ -n "$FSTRIM_OUTPUT" ]]; then
+            while IFS= read -r line; do
+                log_info "$line"
+            done <<< "$FSTRIM_OUTPUT"
+        fi
+        if [[ $FSTRIM_RC -eq 0 ]]; then
+            log_success "Disk trim completed"
+        else
+            log_warning "Disk trim failed (unprivileged LXCs often cannot fstrim; run 'pct fstrim <CTID>' on the Proxmox host instead)"
+        fi
+    fi
+else
+    log_info "Not a Proxmox LXC, skipping disk trim"
 fi
 
 
