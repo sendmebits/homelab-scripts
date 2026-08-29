@@ -7,7 +7,11 @@ It discovers:
 
 - Proxmox VE and the host Debian release
 - Linux distribution releases in running LXC guests
-- A native UniFi Network Application package in an LXC
+- Main applications in those guests: known Debian packages (UniFi,
+  Homebridge, Grafana, and similar), community-scripts version
+  markers, and Node apps under `/opt` (Uptime Kuma, Nginx Proxy Manager, Immich,
+  and others). Display names and public source URLs are mapped from a catalog;
+  unlisted apps still appear if a version file or `package.json` is found
 - Public image metadata, tags, OCI versions, and digests for running Docker
   containers inside LXCs. Private registry hosts, IPs, and ports are stripped
   from `image`/`identifier`; digests are stored as `sha256:…` only; OCI
@@ -39,7 +43,7 @@ The existing `/root/scripts/inventory/.env` should contain:
 ```text
 WRITE_TOKEN=your_64_character_write_token
 READ_TOKEN=your_64_character_read_token
-WORKER_BASE_URL=https://green-wave-2311.chillcat.workers.dev
+WORKER_BASE_URL=https://your-worker.example.workers.dev
 DEFAULT_EXPOSURE=lan-only
 ```
 

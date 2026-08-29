@@ -6,7 +6,6 @@ umask 077
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${SCRIPT_DIR}/.env"
 OUTPUT_FILE="${SCRIPT_DIR}/inventory.json"
-WORKER_BASE_URL_DEFAULT="https://green-wave-2311.chillcat.workers.dev"
 
 if [[ ! -r "${ENV_FILE}" ]]; then
   echo "Missing ${ENV_FILE}" >&2
@@ -17,7 +16,7 @@ fi
 source "${ENV_FILE}"
 
 : "${WRITE_TOKEN:?WRITE_TOKEN is missing from .env}"
-WORKER_BASE_URL="${WORKER_BASE_URL:-${WORKER_BASE_URL_DEFAULT}}"
+: "${WORKER_BASE_URL:?WORKER_BASE_URL is missing from .env}"
 DEFAULT_EXPOSURE="${DEFAULT_EXPOSURE:-lan-only}"
 WORKER_BASE_URL="${WORKER_BASE_URL%/}"
 
@@ -164,6 +163,140 @@ sanitize_container_metadata() {
   IMAGE_REPO_NAME="${repo##*/}"
 }
 
+# Maps dpkg names, npm names, and community-scripts slugs to inventory metadata.
+APP_CATALOG="$(cat <<'CATALOG'
+adguardhome|AdGuard Home|app:adguardhome|https://github.com/AdguardTeam/AdGuardHome
+adguard|AdGuard Home|app:adguardhome|https://github.com/AdguardTeam/AdGuardHome
+audiobookshelf|Audiobookshelf|app:audiobookshelf|https://www.audiobookshelf.org/
+authentik|Authentik|app:authentik|https://goauthentik.io/
+bazarr|Bazarr|app:bazarr|https://www.bazarr.media/
+bookstack|BookStack|app:bookstack|https://www.bookstackapp.com/
+caddy|Caddy|deb:caddy|https://caddyserver.com/
+changedetection|Changedetection.io|app:changedetection|https://changedetection.io/
+containerd.io|containerd|deb:containerd.io|https://containerd.io/
+crowdsec|CrowdSec|deb:crowdsec|https://www.crowdsec.net/
+dashy|Dashy|app:dashy|https://dashy.to/
+docker-ce|Docker Engine|deb:docker-ce|https://docs.docker.com/engine/
+emby-server|Emby Server|deb:emby-server|https://emby.media/
+emby|Emby Server|deb:emby-server|https://emby.media/
+esphome|ESPHome|app:esphome|https://esphome.io/
+fail2ban|Fail2ban|deb:fail2ban|https://www.fail2ban.org/
+filebrowser|File Browser|app:filebrowser|https://filebrowser.org/
+forgejo|Forgejo|app:forgejo|https://forgejo.org/
+frigate|Frigate|app:frigate|https://frigate.video/
+freshrss|FreshRSS|app:freshrss|https://freshrss.org/
+gitea|Gitea|app:gitea|https://about.gitea.com/
+gotify|Gotify|app:gotify|https://gotify.net/
+grafana|Grafana|deb:grafana|https://grafana.com/
+grocy|Grocy|app:grocy|https://grocy.info/
+homeassistant|Home Assistant|app:homeassistant|https://www.home-assistant.io/
+homebridge|Homebridge|deb:homebridge|https://homebridge.io/
+homebox|HomeBox|app:homebox|https://homebox.software/
+homepage|Homepage|app:homepage|https://gethomepage.dev/
+immich|Immich|app:immich|https://immich.app/
+influxdb|InfluxDB|deb:influxdb|https://www.influxdata.com/
+influxdb2|InfluxDB|deb:influxdb2|https://www.influxdata.com/
+jellyfin|Jellyfin|deb:jellyfin|https://jellyfin.org/
+komga|Komga|app:komga|https://komga.org/
+lidarr|Lidarr|app:lidarr|https://lidarr.audio/
+mealie|Mealie|app:mealie|https://mealie.io/
+meshcentral|MeshCentral|app:meshcentral|https://meshcentral.com/
+mosquitto|Eclipse Mosquitto|deb:mosquitto|https://mosquitto.org/
+navidrome|Navidrome|app:navidrome|https://www.navidrome.org/
+nextcloud|Nextcloud|app:nextcloud|https://nextcloud.com/
+nginx|Nginx|deb:nginx|https://nginx.org/
+nginx-proxy-manager|Nginx Proxy Manager|app:nginx-proxy-manager|https://nginxproxymanager.com/
+nginxproxymanager|Nginx Proxy Manager|app:nginx-proxy-manager|https://nginxproxymanager.com/
+node-red|Node-RED|app:node-red|https://nodered.org/
+nodered|Node-RED|app:node-red|https://nodered.org/
+ntfy|ntfy|app:ntfy|https://ntfy.sh/
+nzbget|NZBGet|app:nzbget|https://nzbget.com/
+omada|Omada Controller|app:omada|https://www.tp-link.com/omada/
+openresty|OpenResty|app:openresty|https://openresty.org/
+overseerr|Overseerr|app:overseerr|https://overseerr.dev/
+paperless-ngx|Paperless-ngx|app:paperless-ngx|https://docs.paperless-ngx.com/
+paperless|Paperless-ngx|app:paperless-ngx|https://docs.paperless-ngx.com/
+photoprism|PhotoPrism|app:photoprism|https://www.photoprism.app/
+pihole|Pi-hole|app:pihole|https://pi-hole.net/
+plex|Plex Media Server|deb:plexmediaserver|https://www.plex.tv/media-server-downloads/
+plexmediaserver|Plex Media Server|deb:plexmediaserver|https://www.plex.tv/media-server-downloads/
+portainer|Portainer|app:portainer|https://www.portainer.io/
+prometheus|Prometheus|deb:prometheus|https://prometheus.io/
+prowlarr|Prowlarr|app:prowlarr|https://prowlarr.com/
+qbittorrent-nox|qBittorrent|deb:qbittorrent-nox|https://www.qbittorrent.org/
+radarr|Radarr|app:radarr|https://radarr.video/
+sabnzbdplus|SABnzbd|deb:sabnzbdplus|https://sabnzbd.org/
+sonarr|Sonarr|app:sonarr|https://sonarr.tv/
+stirling-pdf|Stirling PDF|app:stirling-pdf|https://www.stirlingpdf.com/
+syncthing|Syncthing|deb:syncthing|https://syncthing.net/
+tautulli|Tautulli|app:tautulli|https://tautulli.com/
+telegraf|Telegraf|deb:telegraf|https://www.influxdata.com/time-series-platform/telegraf/
+traefik|Traefik|app:traefik|https://traefik.io/
+transmission-daemon|Transmission|deb:transmission-daemon|https://transmissionbt.com/
+unifi|UniFi Network Application|deb:unifi|https://ui.com/download/releases/network-server
+uptime-kuma|Uptime Kuma|app:uptime-kuma|https://github.com/louislam/uptime-kuma
+uptimekuma|Uptime Kuma|app:uptime-kuma|https://github.com/louislam/uptime-kuma
+vaultwarden|Vaultwarden|app:vaultwarden|https://github.com/dani-garcia/vaultwarden
+wikijs|Wiki.js|app:wikijs|https://js.wiki/
+wireguard|WireGuard|deb:wireguard|https://www.wireguard.com/
+zigbee2mqtt|Zigbee2MQTT|app:zigbee2mqtt|https://www.zigbee2mqtt.io/
+CATALOG
+)"
+
+catalog_line() {
+  awk -F'|' -v k="$(lowercase "$1")" 'tolower($1) == k { print; exit }' <<<"${APP_CATALOG}"
+}
+
+pretty_slug() {
+  local slug="${1##*/}"
+  slug="${slug//[-_]/ }"
+  awk '{for (i = 1; i <= NF; i++) { $i = toupper(substr($i, 1, 1)) tolower(substr($i, 2)) } print}' <<<"${slug}"
+}
+
+# Sets RESOLVED_PRODUCT, RESOLVED_ID, RESOLVED_SOURCE from a package/slug name.
+resolve_app() {
+  local key last line
+  key="$(lowercase "$1")"
+  key="${key#@}"
+  last="${key##*/}"
+
+  line="$(catalog_line "${key}")"
+  if [[ -z "${line}" && "${last}" != "${key}" ]]; then
+    line="$(catalog_line "${last}")"
+  fi
+
+  if [[ -n "${line}" ]]; then
+    IFS='|' read -r _ RESOLVED_PRODUCT RESOLVED_ID RESOLVED_SOURCE <<<"${line}"
+    return
+  fi
+
+  RESOLVED_PRODUCT="$(pretty_slug "${last}")"
+  RESOLVED_ID="app:${last}"
+  RESOLVED_SOURCE=""
+}
+
+is_version_string() {
+  local value="$1"
+  [[ "${#value}" -ge 1 && "${#value}" -le 80 ]] || return 1
+  [[ "${value}" =~ ^[vV]?[0-9] ]] || return 1
+  [[ "${value}" != *'|'* && "${value}" != *' '* ]]
+}
+
+append_guest_app() {
+  local key="$1"
+  local version="$2"
+  local fallback_source="${3:-}"
+
+  [[ -n "${key}" && -n "${version}" ]] || return 0
+  is_version_string "${version}" || return 0
+
+  resolve_app "${key}"
+  [[ -n "${RESOLVED_SOURCE}" ]] || RESOLVED_SOURCE="$(sanitize_source_url "${fallback_source}")"
+  append_component \
+    "${RESOLVED_PRODUCT}" "${version}" "stable" "${DEFAULT_EXPOSURE}" \
+    "application" "${RESOLVED_ID}" "${RESOLVED_SOURCE}"
+}
+
 append_component() {
   local product="$1"
   local version="$2"
@@ -220,73 +353,167 @@ collect_proxmox_host() {
   fi
 }
 
+collect_lxc_guest_apps() {
+  local ctid="$1"
+  local facts line kind field_a field_b field_c token
+  local seen="|"
+
+  facts="$(timeout 30s pct exec "${ctid}" -- sh -c "$(cat <<'PROBE'
+if [ -r /etc/os-release ]; then
+  . /etc/os-release
+  printf 'os|%s|%s|%s\n' "${ID:-linux}" "${NAME:-Linux}" "${VERSION_ID:-unknown}"
+fi
+
+if command -v dpkg-query >/dev/null 2>&1; then
+  dpkg-query -W -f='${db:Status-Status}\t${Package}\t${Version}\n' 2>/dev/null \
+    | awk -F '\t' '$1 == "installed" { printf "deb|%s|%s\n", $2, $3 }'
+fi
+
+for f in /var/cache/app-versions/*_version.txt /opt/*_version.txt; do
+  [ -f "$f" ] || continue
+  base=$(basename "$f")
+  app=${base%_version.txt}
+  ver=$(head -n 1 "$f" | tr -d '\r\n')
+  [ -n "$app" ] && [ -n "$ver" ] && printf 'csver|%s|%s\n' "$app" "$ver"
+done
+
+for f in /root/.[!.]*; do
+  [ -f "$f" ] || continue
+  base=$(basename "$f")
+  case "$base" in
+    .bashrc|.profile|.bash_history|.bash_logout|.wget-hsts|.selected_editor|.viminfo|.lesshst|.python_history|.sudo_as_admin_successful|.cloud-locale-test.skip|.motd_shown|.openvino|.intel_version)
+      continue
+      ;;
+  esac
+  size=$(wc -c < "$f" | tr -d ' ')
+  [ "$size" -lt 128 ] 2>/dev/null || continue
+  ver=$(head -n 1 "$f" | tr -d '\r\n')
+  app=${base#.}
+  [ -n "$app" ] && [ -n "$ver" ] && printf 'csver|%s|%s\n' "$app" "$ver"
+done
+
+if command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1; then
+  py=python3
+  command -v python3 >/dev/null 2>&1 || py=python
+  "$py" - <<'PY'
+import json, os, glob
+generic = {"frontend", "backend", "server", "web", "app", "www"}
+paths = glob.glob("/opt/*/package.json") + glob.glob("/opt/*/backend/package.json") + glob.glob("/app/package.json")
+for path in paths:
+    if "node_modules" in path.split(os.sep):
+        continue
+    try:
+        with open(path) as handle:
+            data = json.load(handle)
+    except Exception:
+        continue
+    if not isinstance(data, dict):
+        continue
+    name = str(data.get("name") or "").strip().replace("|", "/")
+    version = str(data.get("version") or "").strip().replace("|", ".")
+    repo = data.get("repository") or ""
+    if isinstance(repo, dict):
+        repo = str(repo.get("url") or "")
+    else:
+        repo = str(repo)
+    parent = os.path.basename(os.path.dirname(path))
+    if parent in {"backend", "frontend"}:
+        parent = os.path.basename(os.path.dirname(os.path.dirname(path)))
+    short = name.rsplit("/", 1)[-1].lstrip("@")
+    if not name or short.lower() in generic:
+        name = parent
+    repo = repo.replace("git+", "").replace("git://", "https://").replace("|", "")
+    if repo.endswith(".git"):
+        repo = repo[:-4]
+    if name and version:
+        print("pkgjson|{}|{}|{}".format(name, version, repo))
+PY
+fi
+PROBE
+)" 2>/dev/null || true)"
+
+  while IFS= read -r line; do
+    [[ -n "${line}" ]] || continue
+    IFS='|' read -r kind field_a field_b field_c <<<"${line}"
+    case "${kind}" in
+      os)
+        append_component \
+          "${field_b} (LXC guest)" "${field_c}" "stable" "${DEFAULT_EXPOSURE}" \
+          "operating-system" "os:${field_a}"
+        ;;
+      deb)
+        [[ -n "$(catalog_line "${field_a}")" ]] || continue
+        resolve_app "${field_a}"
+        token="${RESOLVED_ID}|${field_b}"
+        [[ "${seen}" == *"|${token}|"* ]] && continue
+        seen="${seen}${token}|"
+        append_guest_app "${field_a}" "${field_b}"
+        ;;
+      csver|pkgjson)
+        resolve_app "${field_a}"
+        token="${RESOLVED_ID}|${field_b}"
+        [[ "${seen}" == *"|${token}|"* ]] && continue
+        seen="${seen}${token}|"
+        append_guest_app "${field_a}" "${field_b}" "${field_c:-}"
+        ;;
+    esac
+  done <<<"${facts}"
+}
+
+collect_lxc_guest_docker() {
+  local ctid="$1"
+  local image_ref image_json title version source digest
+  local -a image_refs
+
+  timeout 10s pct exec "${ctid}" -- docker version >/dev/null 2>&1 || return 0
+
+  mapfile -t image_refs < <(
+    timeout 20s pct exec "${ctid}" -- docker ps --format '{{.Image}}' 2>/dev/null | sort -u
+  )
+
+  for image_ref in "${image_refs[@]}"; do
+    [[ -n "${image_ref}" ]] || continue
+    image_json="$(timeout 20s pct exec "${ctid}" -- docker image inspect "${image_ref}" 2>/dev/null || true)"
+
+    if ! jq -e 'type == "array" and length > 0' >/dev/null 2>&1 <<<"${image_json}"; then
+      continue
+    fi
+
+    title="$(jq -r '.[0].Config.Labels["org.opencontainers.image.title"] // empty' <<<"${image_json}")"
+    version="$(jq -r '.[0].Config.Labels["org.opencontainers.image.version"] // empty' <<<"${image_json}")"
+    source="$(jq -r '.[0].Config.Labels["org.opencontainers.image.source"] // empty' <<<"${image_json}")"
+    digest="$(jq -r '.[0].RepoDigests[0] // empty' <<<"${image_json}")"
+
+    sanitize_container_metadata "${image_ref}" "${digest}" "${source}"
+
+    if [[ -z "${version}" && -n "${IMAGE_TAG}" ]]; then
+      version="${IMAGE_TAG}"
+    fi
+    if [[ -z "${version}" && -n "${SANITIZED_DIGEST}" ]]; then
+      version="digest-pinned"
+    fi
+    version="${version:-unknown}"
+
+    if [[ -z "${title}" ]]; then
+      title="${IMAGE_REPO_NAME}"
+    fi
+
+    append_component \
+      "${title}" "${version}" "stable" "${DEFAULT_EXPOSURE}" "container-image" \
+      "${SANITIZED_IDENTIFIER}" "${SANITIZED_SOURCE}" "${SANITIZED_IMAGE}" "${SANITIZED_DIGEST}"
+  done
+}
+
 collect_lxc_guests() {
-  local ctid os_info os_id os_name os_version unifi_version
-  local image_ref image_json title version digest source
-  local -a ctids image_refs
+  local ctid
+  local -a ctids
 
   mapfile -t ctids < <(pct list 2>/dev/null | awk 'NR > 1 && $2 == "running" {print $1}')
 
   for ctid in "${ctids[@]}"; do
-    # Only distribution/version are retained. CTID, hostname, and IP are discarded.
-    os_info="$(timeout 15s pct exec "${ctid}" -- sh -c \
-      '. /etc/os-release 2>/dev/null || exit 1; printf "%s|%s|%s\n" "${ID:-linux}" "${NAME:-Linux}" "${VERSION_ID:-unknown}"' \
-      2>/dev/null || true)"
-
-    if [[ -n "${os_info}" ]]; then
-      IFS='|' read -r os_id os_name os_version <<<"${os_info}"
-      append_component \
-        "${os_name} (LXC guest)" "${os_version}" "stable" "${DEFAULT_EXPOSURE}" \
-        "operating-system" "os:${os_id}"
-    fi
-
-    # Detect a native UniFi Network Application package, if present.
-    unifi_version="$(timeout 15s pct exec "${ctid}" -- \
-      dpkg-query -W '-f=${Version}\n' unifi 2>/dev/null || true)"
-    if [[ -n "${unifi_version}" ]]; then
-      append_component \
-        "UniFi Network Application" "${unifi_version}" "stable" "${DEFAULT_EXPOSURE}" \
-        "application" "deb:unifi" "https://ui.com/download/releases/network-server"
-    fi
-
-    # Detect running Docker workloads. Only public image metadata is retained.
-    if timeout 10s pct exec "${ctid}" -- docker version >/dev/null 2>&1; then
-      mapfile -t image_refs < <(
-        timeout 20s pct exec "${ctid}" -- docker ps --format '{{.Image}}' 2>/dev/null | sort -u
-      )
-
-      for image_ref in "${image_refs[@]}"; do
-        [[ -n "${image_ref}" ]] || continue
-        image_json="$(timeout 20s pct exec "${ctid}" -- docker image inspect "${image_ref}" 2>/dev/null || true)"
-
-        if ! jq -e 'type == "array" and length > 0' >/dev/null 2>&1 <<<"${image_json}"; then
-          continue
-        fi
-
-        title="$(jq -r '.[0].Config.Labels["org.opencontainers.image.title"] // empty' <<<"${image_json}")"
-        version="$(jq -r '.[0].Config.Labels["org.opencontainers.image.version"] // empty' <<<"${image_json}")"
-        source="$(jq -r '.[0].Config.Labels["org.opencontainers.image.source"] // empty' <<<"${image_json}")"
-        digest="$(jq -r '.[0].RepoDigests[0] // empty' <<<"${image_json}")"
-
-        sanitize_container_metadata "${image_ref}" "${digest}" "${source}"
-
-        if [[ -z "${version}" && -n "${IMAGE_TAG}" ]]; then
-          version="${IMAGE_TAG}"
-        fi
-        if [[ -z "${version}" && -n "${SANITIZED_DIGEST}" ]]; then
-          version="digest-pinned"
-        fi
-        version="${version:-unknown}"
-
-        if [[ -z "${title}" ]]; then
-          title="${IMAGE_REPO_NAME}"
-        fi
-
-        append_component \
-          "${title}" "${version}" "stable" "${DEFAULT_EXPOSURE}" "container-image" \
-          "${SANITIZED_IDENTIFIER}" "${SANITIZED_SOURCE}" "${SANITIZED_IMAGE}" "${SANITIZED_DIGEST}"
-      done
-    fi
+    # CTID, hostname, and IP are discarded; only software names/versions are kept.
+    collect_lxc_guest_apps "${ctid}"
+    collect_lxc_guest_docker "${ctid}"
   done
 }
 
