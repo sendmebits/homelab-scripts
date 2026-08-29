@@ -283,9 +283,10 @@ is_version_string() {
 }
 
 append_guest_app() {
-  local key="$1"
-  local version="$2"
-  local fallback_source="${3:-}"
+  local ctid="$1"
+  local key="$2"
+  local version="$3"
+  local fallback_source="${4:-}"
 
   [[ -n "${key}" && -n "${version}" ]] || return 0
   is_version_string "${version}" || return 0
@@ -293,7 +294,7 @@ append_guest_app() {
   resolve_app "${key}"
   [[ -n "${RESOLVED_SOURCE}" ]] || RESOLVED_SOURCE="$(sanitize_source_url "${fallback_source}")"
   append_component \
-    "${RESOLVED_PRODUCT}" "${version}" "stable" "${DEFAULT_EXPOSURE}" \
+    "${RESOLVED_PRODUCT} (LXC guest ${ctid})" "${version}" "stable" "${DEFAULT_EXPOSURE}" \
     "application" "${RESOLVED_ID}" "${RESOLVED_SOURCE}"
 }
 
@@ -447,14 +448,14 @@ PROBE
         token="${RESOLVED_ID}|${field_b}"
         [[ "${seen}" == *"|${token}|"* ]] && continue
         seen="${seen}${token}|"
-        append_guest_app "${field_a}" "${field_b}"
+        append_guest_app "${ctid}" "${field_a}" "${field_b}"
         ;;
       csver|pkgjson)
         resolve_app "${field_a}"
         token="${RESOLVED_ID}|${field_b}"
         [[ "${seen}" == *"|${token}|"* ]] && continue
         seen="${seen}${token}|"
-        append_guest_app "${field_a}" "${field_b}" "${field_c:-}"
+        append_guest_app "${ctid}" "${field_a}" "${field_b}" "${field_c:-}"
         ;;
     esac
   done <<<"${facts}"
@@ -499,7 +500,7 @@ collect_lxc_guest_docker() {
     fi
 
     append_component \
-      "${title}" "${version}" "stable" "${DEFAULT_EXPOSURE}" "container-image" \
+      "${title} (LXC guest ${ctid})" "${version}" "stable" "${DEFAULT_EXPOSURE}" "container-image" \
       "${SANITIZED_IDENTIFIER}" "${SANITIZED_SOURCE}" "${SANITIZED_IMAGE}" "${SANITIZED_DIGEST}"
   done
 }
@@ -511,7 +512,7 @@ collect_lxc_guests() {
   mapfile -t ctids < <(pct list 2>/dev/null | awk 'NR > 1 && $2 == "running" {print $1}')
 
   for ctid in "${ctids[@]}"; do
-    # CTID labels guest OS rows; hostnames, names, IPs, and workload mapping are omitted.
+    # CTID labels guest rows; hostnames, names, IPs, and internal endpoints are omitted.
     collect_lxc_guest_apps "${ctid}"
     collect_lxc_guest_docker "${ctid}"
   done
@@ -540,7 +541,7 @@ collect_proxmox_host
 collect_lxc_guests
 collect_drop_ins
 
-# Combine identical deployments without disclosing which guest runs app/container workloads.
+# Combine identical deployments after CTID labels separate guest-specific rows.
 COMPONENTS="$(jq -c '
   sort_by([.product, .version, .channel, .exposure, .kind, .identifier, .image, .digest])
   | group_by([.product, .version, .channel, .exposure, .kind, .identifier, .image, .digest])
