@@ -18,9 +18,11 @@ It discovers:
   `source` is kept only for public HTTPS URLs
 - Optional components emitted by executable scripts in `collectors.d/`
 
-It deliberately does not publish Proxmox node names, LXC IDs/names, container
-names, IP addresses, ports, or internal domains. Identical components are
-aggregated with `deployment_count`.
+Guest OS rows include numeric LXC IDs to distinguish otherwise identical
+releases. It deliberately does not publish Proxmox node names, LXC names,
+container names, IP addresses, ports, internal domains, or which guest runs
+which app/container workload. Identical components are aggregated with
+`deployment_count`.
 
 ## Install
 

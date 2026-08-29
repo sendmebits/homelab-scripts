@@ -438,7 +438,7 @@ PROBE
     case "${kind}" in
       os)
         append_component \
-          "${field_b} (LXC guest)" "${field_c}" "stable" "${DEFAULT_EXPOSURE}" \
+          "${field_b} (LXC guest ${ctid})" "${field_c}" "stable" "${DEFAULT_EXPOSURE}" \
           "operating-system" "os:${field_a}"
         ;;
       deb)
@@ -511,7 +511,7 @@ collect_lxc_guests() {
   mapfile -t ctids < <(pct list 2>/dev/null | awk 'NR > 1 && $2 == "running" {print $1}')
 
   for ctid in "${ctids[@]}"; do
-    # CTID, hostname, and IP are discarded; only software names/versions are kept.
+    # CTID labels guest OS rows; hostnames, names, IPs, and workload mapping are omitted.
     collect_lxc_guest_apps "${ctid}"
     collect_lxc_guest_docker "${ctid}"
   done
@@ -540,7 +540,7 @@ collect_proxmox_host
 collect_lxc_guests
 collect_drop_ins
 
-# Combine identical deployments without disclosing which internal guest runs them.
+# Combine identical deployments without disclosing which guest runs app/container workloads.
 COMPONENTS="$(jq -c '
   sort_by([.product, .version, .channel, .exposure, .kind, .identifier, .image, .digest])
   | group_by([.product, .version, .channel, .exposure, .kind, .identifier, .image, .digest])
