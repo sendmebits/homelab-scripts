@@ -1,0 +1,12 @@
+[Unit]
+Description=Run homelab software inventory daily
+
+[Timer]
+OnCalendar=*-*-* 04:15:00
+RandomizedDelaySec=15m
+Persistent=true
+Unit=homelab-inventory.service
+
+[Install]
+WantedBy=timers.target
+
