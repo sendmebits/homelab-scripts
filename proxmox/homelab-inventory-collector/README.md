@@ -19,18 +19,22 @@ It discovers:
 - Optional components emitted by executable scripts in `collectors.d/`
 
 `exposure` is a reachability label for the monitor, not a guarantee of a
-current WAN path. Values are `internet`, `internet-via-proxy`, `vpn-only`,
-and `lan-only`. Guests start as `DEFAULT_EXPOSURE` (usually `lan-only`).
-Proxmox VE and the host OS stay `vpn-only` unless overridden.
+current WAN path. Built-in values are `internet`, `internet-via-proxy`,
+`vpn-only`, and `lan-only`. For Nginx Proxy Manager backends, the collector
+publishes the NPM access-list name instead, such as `Internal` or `Public`.
+Guests start as `DEFAULT_EXPOSURE` (usually `lan-only`). Proxmox VE and the
+host OS stay `vpn-only` unless overridden.
 
 The collector then upgrades guest apps when it can do so without publishing
 hostnames or IPs:
 
-- Nginx Proxy Manager SQLite (`/data/database.sqlite`) and generated proxy
-  host configs: a public DNS name (not `.local` / `.lan` / an IP) marks the
-  proxy as `internet` and the matched backend app as `internet-via-proxy`
+- Nginx Proxy Manager SQLite (`/data/database.sqlite`): a public DNS name
+  (not `.local` / `.lan` / an IP) marks the proxy as `internet` and the
+  matched backend app is recorded with the NPM access-list name. Hosts with
+  no access list are recorded as `Public`.
 - Other nginx/OpenResty `server_name` + `proxy_pass` configs, and
-  `cloudflared` ingress hostnames, use the same rule
+  `cloudflared` ingress hostnames, record matched backends as
+  `internet-via-proxy`
 - Plex `Preferences.xml` remote-access flags
   (`PublishServerOnPlexOnlineKey`, a mapped port, or manual port mapping)
   mark Plex as `internet`
@@ -40,8 +44,9 @@ published Docker ports or well-known app ports. Operating systems and helper
 packages (Docker Engine, containerd, Node.js, and similar) stay `lan-only`.
 
 This cannot see a router port-forward that never hits a reverse proxy, UniFi
-cloud remote access, or whether a public NPM hostname is only used via split
-DNS. Those cases need a manual tag.
+cloud remote access, or whether an NPM access-list name means what you intend.
+It copies the label; it does not parse allow/deny rules or basic-auth settings.
+Those cases need a manual tag.
 
 Create `/root/scripts/inventory/exposure.map` to force a value. Overrides
 always win, including downgrades:
@@ -49,8 +54,9 @@ always win, including downgrades:
 ```text
 # identifier[@ctid]  exposure
 deb:plexmediaserver internet
-app:seerr internet-via-proxy
+app:seerr Internal
 app:homepage@111 lan-only
+oci:docker.io/louislam/dockge:1@123 Internal
 ```
 
 Rows collected from LXC guests include numeric LXC IDs to distinguish otherwise

@@ -154,8 +154,9 @@ set_detected_exposure() {
     --arg id "${identifier}" \
     --arg exp "${exposure}" '
       def rank($e):
-        if $e == "internet" then 3
-        elif $e == "internet-via-proxy" then 2
+        if $e == "internet" then 4
+        elif $e == "Public" or $e == "internet-via-proxy" then 3
+        elif $e != null and $e != "" and $e != "lan-only" and $e != "vpn-only" then 2
         elif $e == "vpn-only" then 1
         else 0 end;
       .[$ctid] |= (. // {})
@@ -693,15 +694,18 @@ def any_public(names):
             return True
     return False
 
-def emit(kind, a, b=""):
-    a = str(a or "").replace("|", "").replace("\n", "")
-    b = str(b or "").replace("|", "").replace("\n", "")
-    if not a:
+def clean_field(value, limit=120):
+    return str(value or "").replace("|", "").replace("\r", "").replace("\n", "").strip()[:limit]
+
+def emit(kind, *fields):
+    fields = [clean_field(value) for value in fields]
+    if not fields or not fields[0]:
         return
-    if b:
-        sys.stdout.write("%s|%s|%s\n" % (kind, a, b))
-    else:
-        sys.stdout.write("%s|%s\n" % (kind, a))
+    sys.stdout.write("%s|%s\n" % (kind, "|".join(fields)))
+
+def normalize_access_list_name(name):
+    name = clean_field(name, 40)
+    return name or "Public"
 
 def parse_domain_names(raw):
     if not raw:
@@ -726,7 +730,10 @@ def split_host_port(target):
         return host, port
     return target, ""
 
+NPM_SQLITE_HAS_PROXY_HOST = False
+
 def scan_npm_sqlite():
+    global NPM_SQLITE_HAS_PROXY_HOST
     found_public = False
     try:
         import sqlite3
@@ -741,18 +748,24 @@ def scan_npm_sqlite():
             if "proxy_host" not in tables:
                 con.close()
                 continue
+            NPM_SQLITE_HAS_PROXY_HOST = True
             try:
                 rows = con.execute(
-                    "SELECT domain_names, forward_host, forward_port FROM proxy_host "
-                    "WHERE IFNULL(enabled,1)=1 AND IFNULL(is_deleted,0)=0"
+                    "SELECT p.domain_names, p.forward_host, p.forward_port, a.name "
+                    "FROM proxy_host p "
+                    "LEFT JOIN access_list a ON a.id = p.access_list_id "
+                    "WHERE IFNULL(p.enabled,1)=1 AND IFNULL(p.is_deleted,0)=0"
                 )
             except Exception:
-                rows = con.execute("SELECT domain_names, forward_host, forward_port FROM proxy_host")
-            for domains, fhost, fport in rows:
+                rows = con.execute(
+                    "SELECT domain_names, forward_host, forward_port, NULL FROM proxy_host "
+                    "WHERE IFNULL(enabled,1)=1 AND IFNULL(is_deleted,0)=0"
+                )
+            for domains, fhost, fport, access_name in rows:
                 if any_public(parse_domain_names(domains)):
                     found_public = True
                     if fhost:
-                        emit("backend", host_without_port(str(fhost)), fport or "")
+                        emit("backend", host_without_port(str(fhost)), fport or "", normalize_access_list_name(access_name))
             con.close()
         except Exception:
             continue
@@ -809,6 +822,8 @@ def scan_nginx():
     seen = set()
     for path in files:
         if path in seen or not os.path.isfile(path) or path.endswith(".err"):
+            continue
+        if NPM_SQLITE_HAS_PROXY_HOST and path.startswith("/data/nginx/proxy_host/"):
             continue
         seen.add(path)
         try:
@@ -898,11 +913,11 @@ PY
 }
 
 process_exposure_facts() {
-  local ctid="$1" line kind field_a field_b backend_ctid port ident matched
+  local ctid="$1" line kind field_a field_b field_c backend_ctid port ident label matched
 
   while IFS= read -r line; do
     [[ -n "${line}" ]] || continue
-    IFS='|' read -r kind field_a field_b <<<"${line}"
+    IFS='|' read -r kind field_a field_b field_c <<<"${line}"
     case "${kind}" in
       edge)
         set_detected_exposure "${ctid}" "${field_a}" "internet"
@@ -914,23 +929,24 @@ process_exposure_facts() {
         backend_ctid="$(lookup_ctid "${field_a}")"
         [[ -n "${backend_ctid}" ]] || continue
         port="${field_b}"
+        label="${field_c:-internet-via-proxy}"
         matched=0
         if [[ -n "${port}" ]]; then
           while IFS='|' read -r _ _ ident; do
             [[ -n "${ident}" ]] || continue
-            set_detected_exposure "${backend_ctid}" "${ident}" "internet-via-proxy"
+            set_detected_exposure "${backend_ctid}" "${ident}" "${label}"
             matched=1
           done < <(awk -F'|' -v c="${backend_ctid}" -v p="${port}" '$1 == c && $2 == p { print }' <<<"${PORT_BINDINGS}")
           while IFS='|' read -r _ ident; do
             [[ -n "${ident}" ]] || continue
             if ct_has_identifier "${backend_ctid}" "${ident}"; then
-              set_detected_exposure "${backend_ctid}" "${ident}" "internet-via-proxy"
+              set_detected_exposure "${backend_ctid}" "${ident}" "${label}"
               matched=1
             fi
           done < <(awk -F'|' -v p="${port}" '$1 == p { print }' <<<"${KNOWN_PORTS}")
         fi
         if [[ "${matched}" -eq 0 ]]; then
-          set_detected_exposure "${backend_ctid}" "*" "internet-via-proxy"
+          set_detected_exposure "${backend_ctid}" "*" "${label}"
         fi
         ;;
     esac
@@ -947,8 +963,9 @@ collect_lxc_guest_exposure() {
 apply_detected_exposure() {
   COMPONENTS="$(jq -c --argjson detected "${DETECTED_EXPOSURE}" '
     def rank($e):
-      if $e == "internet" then 3
-      elif $e == "internet-via-proxy" then 2
+      if $e == "internet" then 4
+      elif $e == "Public" or $e == "internet-via-proxy" then 3
+      elif $e != null and $e != "" and $e != "lan-only" and $e != "vpn-only" then 2
       elif $e == "vpn-only" then 1
       else 0 end;
     def ctid:
@@ -982,15 +999,8 @@ apply_exposure_overrides() {
   while IFS= read -r line || [[ -n "${line}" ]]; do
     line="${line%%#*}"
     key="$(awk '{print $1}' <<<"${line}")"
-    exp="$(awk '{print $2}' <<<"${line}")"
+    exp="$(awk '{$1=""; sub(/^[[:space:]]+/, ""); print}' <<<"${line}")"
     [[ -n "${key}" && -n "${exp}" ]] || continue
-    case "${exp}" in
-      internet|internet-via-proxy|vpn-only|lan-only) ;;
-      *)
-        echo "Ignoring invalid exposure override: ${key} ${exp}" >&2
-        continue
-        ;;
-    esac
     overrides="$(jq -c --arg k "${key}" --arg e "${exp}" '.[$k] = $e' <<<"${overrides}")"
   done <"${EXPOSURE_MAP_FILE}"
 
