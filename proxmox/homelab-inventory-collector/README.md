@@ -18,6 +18,41 @@ It discovers:
   `source` is kept only for public HTTPS URLs
 - Optional components emitted by executable scripts in `collectors.d/`
 
+`exposure` is a reachability label for the monitor, not a guarantee of a
+current WAN path. Values are `internet`, `internet-via-proxy`, `vpn-only`,
+and `lan-only`. Guests start as `DEFAULT_EXPOSURE` (usually `lan-only`).
+Proxmox VE and the host OS stay `vpn-only` unless overridden.
+
+The collector then upgrades guest apps when it can do so without publishing
+hostnames or IPs:
+
+- Nginx Proxy Manager SQLite (`/data/database.sqlite`) and generated proxy
+  host configs: a public DNS name (not `.local` / `.lan` / an IP) marks the
+  proxy as `internet` and the matched backend app as `internet-via-proxy`
+- Other nginx/OpenResty `server_name` + `proxy_pass` configs, and
+  `cloudflared` ingress hostnames, use the same rule
+- Plex `Preferences.xml` remote-access flags
+  (`PublishServerOnPlexOnlineKey`, a mapped port, or manual port mapping)
+  mark Plex as `internet`
+
+Backends are matched to LXC guests by unpublished IP/hostname, then by
+published Docker ports or well-known app ports. Operating systems and helper
+packages (Docker Engine, containerd, Node.js, and similar) stay `lan-only`.
+
+This cannot see a router port-forward that never hits a reverse proxy, UniFi
+cloud remote access, or whether a public NPM hostname is only used via split
+DNS. Those cases need a manual tag.
+
+Create `/root/scripts/inventory/exposure.map` to force a value. Overrides
+always win, including downgrades:
+
+```text
+# identifier[@ctid]  exposure
+deb:plexmediaserver internet
+app:seerr internet-via-proxy
+app:homepage@111 lan-only
+```
+
 Rows collected from LXC guests include numeric LXC IDs to distinguish otherwise
 identical OS releases, applications, and container images. It deliberately does
 not publish Proxmox node names, LXC names, container names, IP addresses, ports,

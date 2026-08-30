@@ -35,6 +35,44 @@ if ! flock -n 9; then
 fi
 
 COMPONENTS='[]'
+EXPOSURE_MAP_FILE="${SCRIPT_DIR}/exposure.map"
+DETECTED_EXPOSURE='{}'
+# Unpublished CT addressing used only to map reverse-proxy backends.
+ADDR_TO_CT=""
+PORT_BINDINGS=""
+
+# Native app ports used when a public proxy forwards to an LXC IP:port.
+KNOWN_PORTS="$(cat <<'PORTS'
+32400|deb:plexmediaserver
+5055|app:seerr
+5055|app:overseerr
+8989|app:sonarr
+7878|app:radarr
+9696|app:prowlarr
+8181|app:tautulli
+8080|app:sabnzbd-org
+8080|deb:sabnzbdplus
+8096|deb:jellyfin
+8096|app:jellyfin
+8443|deb:unifi
+8581|deb:homebridge
+3000|app:homepage
+3000|app:uptime-kuma
+3001|app:uptime-kuma
+2283|app:immich
+5006|app:actual-sync
+5006|app:actual
+8123|app:homeassistant
+8384|deb:syncthing
+8686|app:lidarr
+6767|app:bazarr
+9117|app:jackett
+6789|app:nzbget
+9091|deb:transmission-daemon
+8085|app:changedetection
+5000|app:changedetection
+PORTS
+)"
 
 lowercase() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
@@ -73,6 +111,56 @@ is_internal_host() {
   esac
   [[ "${host}" != *.* ]] && return 0
   return 1
+}
+
+# True for a real public DNS name. IPs, short names, and internal TLDs are not.
+is_public_hostname() {
+  ! is_internal_host "$1"
+}
+
+append_addr_map() {
+  local addr ctid
+  addr="$(lowercase "$1")"
+  ctid="$2"
+  [[ -n "${addr}" && -n "${ctid}" ]] || return 0
+  ADDR_TO_CT+="${addr}|${ctid}"$'\n'
+}
+
+append_port_binding() {
+  local ctid="$1" port="$2" identifier="$3"
+  [[ -n "${ctid}" && -n "${port}" && -n "${identifier}" ]] || return 0
+  [[ "${port}" =~ ^[0-9]+$ ]] || return 0
+  PORT_BINDINGS+="${ctid}|${port}|${identifier}"$'\n'
+}
+
+lookup_ctid() {
+  local addr
+  addr="$(lowercase "$(host_without_port "$1")")"
+  [[ -n "${addr}" ]] || return 0
+  awk -F'|' -v a="${addr}" '$1 == a { print $2; exit }' <<<"${ADDR_TO_CT}"
+}
+
+ct_has_identifier() {
+  local ctid="$1" ident="$2"
+  jq -e --arg suffix " (LXC guest ${ctid})" --arg id "${ident}" \
+    'any(.[]; .identifier == $id and (.product | endswith($suffix)))' \
+    >/dev/null 2>&1 <<<"${COMPONENTS}"
+}
+
+set_detected_exposure() {
+  local ctid="$1" identifier="$2" exposure="$3"
+  DETECTED_EXPOSURE="$(jq -c \
+    --arg ctid "${ctid}" \
+    --arg id "${identifier}" \
+    --arg exp "${exposure}" '
+      def rank($e):
+        if $e == "internet" then 3
+        elif $e == "internet-via-proxy" then 2
+        elif $e == "vpn-only" then 1
+        else 0 end;
+      .[$ctid] |= (. // {})
+      | if rank($exp) > rank(.[$ctid][$id]) then .[$ctid][$id] = $exp else . end
+    ' <<<"${DETECTED_EXPOSURE}")"
 }
 
 is_public_registry() {
@@ -214,6 +302,7 @@ nzbget|NZBGet|app:nzbget|https://nzbget.com/
 omada|Omada Controller|app:omada|https://www.tp-link.com/omada/
 openresty|OpenResty|app:openresty|https://openresty.org/
 overseerr|Overseerr|app:overseerr|https://overseerr.dev/
+seerr|Seerr|app:seerr|https://seerr.dev/
 paperless-ngx|Paperless-ngx|app:paperless-ngx|https://docs.paperless-ngx.com/
 paperless|Paperless-ngx|app:paperless-ngx|https://docs.paperless-ngx.com/
 photoprism|PhotoPrism|app:photoprism|https://www.photoprism.app/
@@ -463,14 +552,24 @@ PROBE
 
 collect_lxc_guest_docker() {
   local ctid="$1"
-  local image_ref image_json title version source digest
-  local -a image_refs
+  local image_ref image_json title version source digest row ports
+  local -a image_refs container_rows
 
   timeout 10s pct exec "${ctid}" -- docker version >/dev/null 2>&1 || return 0
 
-  mapfile -t image_refs < <(
-    timeout 20s pct exec "${ctid}" -- docker ps --format '{{.Image}}' 2>/dev/null | sort -u
+  mapfile -t container_rows < <(
+    timeout 20s pct exec "${ctid}" -- docker ps --format '{{.Image}}|{{.Ports}}' 2>/dev/null
   )
+
+  for row in "${container_rows[@]}"; do
+    [[ -n "${row}" ]] || continue
+    image_ref="${row%%|*}"
+    ports="${row#*|}"
+    [[ -n "${image_ref}" ]] || continue
+    record_docker_published_ports "${ctid}" "${image_ref}" "${ports}"
+  done
+
+  mapfile -t image_refs < <(printf '%s\n' "${container_rows[@]}" | awk -F'|' 'NF { print $1 }' | sort -u)
 
   for image_ref in "${image_refs[@]}"; do
     [[ -n "${image_ref}" ]] || continue
@@ -505,6 +604,407 @@ collect_lxc_guest_docker() {
   done
 }
 
+record_docker_published_ports() {
+  local ctid="$1" image_ref="$2" ports="$3" ident spec port
+  sanitize_container_metadata "${image_ref}" "" ""
+  ident="${SANITIZED_IDENTIFIER}"
+  while IFS= read -r spec; do
+    spec="${spec#"${spec%%[![:space:]]*}"}"
+    [[ "${spec}" == *0.0.0.0:* || "${spec}" == *\[::\]:* || "${spec}" == *:::* ]] || continue
+    port="$(sed -n 's/.*:\([0-9][0-9]*\)->.*/\1/p' <<<"${spec}")"
+    append_port_binding "${ctid}" "${port}" "${ident}"
+  done < <(tr ',' '\n' <<<"${ports}")
+}
+
+record_guest_addresses() {
+  local ctid="$1" host ip
+
+  host="$(timeout 10s pct exec "${ctid}" -- hostname -s 2>/dev/null | tr -d '\r\n' || true)"
+  host="$(lowercase "${host}")"
+  if [[ -n "${host}" ]]; then
+    append_addr_map "${host}" "${ctid}"
+    append_addr_map "${host}.lan" "${ctid}"
+    append_addr_map "${host}.local" "${ctid}"
+    append_addr_map "${host}.home" "${ctid}"
+    append_addr_map "${host}.internal" "${ctid}"
+    append_addr_map "${host}.home.arpa" "${ctid}"
+    append_addr_map "${host}.homelab" "${ctid}"
+  fi
+
+  host="$(timeout 10s pct exec "${ctid}" -- hostname -f 2>/dev/null | tr -d '\r\n' || true)"
+  host="$(lowercase "${host}")"
+  [[ -n "${host}" ]] && append_addr_map "${host}" "${ctid}"
+
+  host="$(pct config "${ctid}" 2>/dev/null | awk -F': ' '/^hostname:/ { print tolower($2); exit }')"
+  [[ -n "${host}" ]] && append_addr_map "${host}" "${ctid}"
+
+  while IFS= read -r ip; do
+    ip="$(lowercase "$(tr -d '\r\n' <<<"${ip}")")"
+    [[ -n "${ip}" ]] && append_addr_map "${ip}" "${ctid}"
+  done < <(timeout 10s pct exec "${ctid}" -- hostname -I 2>/dev/null | tr ' ' '\n')
+
+  while IFS= read -r ip; do
+    [[ -n "${ip}" ]] && append_addr_map "${ip}" "${ctid}"
+  done < <(pct config "${ctid}" 2>/dev/null | grep -oE 'ip=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | cut -d= -f2)
+}
+
+# Guest probe prints edge/backend/direct facts. Domain names are never printed.
+exposure_probe_python() {
+  cat <<'PY'
+import glob, json, os, re, sys
+
+INTERNAL_SUFFIXES = (
+    ".local", ".internal", ".lan", ".home", ".corp", ".localdomain",
+    ".intranet", ".private", ".homelab", ".home.arpa",
+)
+
+def host_without_port(host):
+    host = (host or "").strip().strip('"').strip("'")
+    if host.startswith("[") and "]" in host:
+        end = host.find("]")
+        return host[1:end]
+    if host.count(":") == 1:
+        return host.split(":", 1)[0]
+    return host
+
+def is_internal_host(host):
+    host = host_without_port(host).lower().rstrip(".")
+    if not host or host == "localhost" or host.startswith("localhost."):
+        return True
+    if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", host):
+        return True
+    if ":" in host:
+        return True
+    for suffix in INTERNAL_SUFFIXES:
+        if host.endswith(suffix):
+            return True
+    if "." not in host:
+        return True
+    return False
+
+def any_public(names):
+    for name in names:
+        name = str(name or "").strip().lower().rstrip(".")
+        if name.startswith("*."):
+            name = name[2:]
+        if name in ("_", "-", "localhost"):
+            continue
+        if name and not is_internal_host(name):
+            return True
+    return False
+
+def emit(kind, a, b=""):
+    a = str(a or "").replace("|", "").replace("\n", "")
+    b = str(b or "").replace("|", "").replace("\n", "")
+    if not a:
+        return
+    if b:
+        sys.stdout.write("%s|%s|%s\n" % (kind, a, b))
+    else:
+        sys.stdout.write("%s|%s\n" % (kind, a))
+
+def parse_domain_names(raw):
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+        if isinstance(data, list):
+            return [str(x) for x in data]
+        return [str(data)]
+    except Exception:
+        return [str(raw)]
+
+def split_host_port(target):
+    target = (target or "").strip().strip('"').strip("'")
+    if target.startswith("["):
+        if "]:" in target:
+            host, port = target.rsplit("]:", 1)
+            return host.strip("[]"), port
+        return target.strip("[]"), ""
+    if target.count(":") == 1:
+        host, port = target.split(":", 1)
+        return host, port
+    return target, ""
+
+def scan_npm_sqlite():
+    found_public = False
+    try:
+        import sqlite3
+    except Exception:
+        return False
+    for path in ("/data/database.sqlite", "/opt/nginxproxymanager/data/database.sqlite"):
+        if not os.path.isfile(path):
+            continue
+        try:
+            con = sqlite3.connect("file:%s?mode=ro&immutable=1" % path, uri=True)
+            tables = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if "proxy_host" not in tables:
+                con.close()
+                continue
+            try:
+                rows = con.execute(
+                    "SELECT domain_names, forward_host, forward_port FROM proxy_host "
+                    "WHERE IFNULL(enabled,1)=1 AND IFNULL(is_deleted,0)=0"
+                )
+            except Exception:
+                rows = con.execute("SELECT domain_names, forward_host, forward_port FROM proxy_host")
+            for domains, fhost, fport in rows:
+                if any_public(parse_domain_names(domains)):
+                    found_public = True
+                    if fhost:
+                        emit("backend", host_without_port(str(fhost)), fport or "")
+            con.close()
+        except Exception:
+            continue
+    return found_public
+
+def iter_server_blocks(text):
+    idx = 0
+    while True:
+        match = re.search(r"\bserver\s*\{", text[idx:])
+        if not match:
+            return
+        start = idx + match.end()
+        depth = 1
+        i = start
+        while i < len(text) and depth:
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+            i += 1
+        yield text[start:i - 1]
+        idx = i
+
+def parse_nginx_text(text):
+    public = False
+    backends = []
+    for block in iter_server_blocks(text):
+        names = []
+        for match in re.finditer(r"\bserver_name\s+([^;]+);", block):
+            names.extend(match.group(1).split())
+        if not any_public(names):
+            continue
+        public = True
+        match = re.search(r'set\s+\$server\s+"?([^";]+)"?\s*;', block)
+        port_match = re.search(r"set\s+\$port\s+([0-9]+)\s*;", block)
+        if match:
+            backends.append((host_without_port(match.group(1).strip()), port_match.group(1) if port_match else ""))
+        for match in re.finditer(r"proxy_pass\s+https?://([^/;\s]+)", block):
+            host, port = split_host_port(match.group(1))
+            if host:
+                backends.append((host, port))
+    return public, backends
+
+def scan_nginx():
+    public = False
+    files = []
+    for pat in (
+        "/data/nginx/proxy_host/*.conf",
+        "/etc/nginx/sites-enabled/*",
+        "/etc/nginx/conf.d/*.conf",
+        "/usr/local/openresty/nginx/conf/conf.d/*.conf",
+    ):
+        files.extend(glob.glob(pat))
+    seen = set()
+    for path in files:
+        if path in seen or not os.path.isfile(path) or path.endswith(".err"):
+            continue
+        seen.add(path)
+        try:
+            with open(path, "r", errors="ignore") as handle:
+                text = handle.read()
+        except Exception:
+            continue
+        is_pub, backends = parse_nginx_text(text)
+        if is_pub:
+            public = True
+            for host, port in backends:
+                if host:
+                    emit("backend", host, port)
+    return public
+
+def scan_cloudflared():
+    public = False
+    paths = (
+        "/etc/cloudflared/config.yml",
+        "/etc/cloudflared/config.yaml",
+        "/root/.cloudflared/config.yml",
+        "/root/.cloudflared/config.yaml",
+    )
+    for path in paths:
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, "r", errors="ignore") as handle:
+                lines = handle.readlines()
+        except Exception:
+            continue
+        hostname = None
+        for raw in lines:
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            match = re.match(r"hostname:\s*[\"']?([^\"'\s]+)", line)
+            if match:
+                hostname = match.group(1)
+                continue
+            match = re.match(r"service:\s*[\"']?(https?://\S+)", line)
+            if match and hostname:
+                if any_public([hostname]):
+                    public = True
+                    host, port = split_host_port(re.sub(r"^https?://", "", re.sub(r"[\"']$", "", match.group(1))).split("/")[0])
+                    emit("backend", host, port)
+                hostname = None
+    return public
+
+def scan_plex():
+    candidates = [
+        "/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/Preferences.xml",
+    ]
+    candidates.extend(glob.glob("/var/lib/plexmediaserver/**/Preferences.xml", recursive=True))
+    seen = set()
+    for path in candidates:
+        if path in seen or not os.path.isfile(path):
+            continue
+        seen.add(path)
+        try:
+            import xml.etree.ElementTree as ET
+            root = ET.parse(path).getroot()
+        except Exception:
+            continue
+        attrs = root.attrib
+        published = str(attrs.get("PublishServerOnPlexOnlineKey", "0")).lower()
+        mapped = str(attrs.get("LastAutomaticMappedPort", "0"))
+        manual = str(attrs.get("ManualPortMappingMode", "0")).lower()
+        if published in ("1", "true") or manual in ("1", "true") or (mapped.isdigit() and int(mapped) > 0):
+            emit("direct", "deb:plexmediaserver")
+            return
+
+npm_public = scan_npm_sqlite()
+nginx_public = scan_nginx()
+cf_public = scan_cloudflared()
+npm_layout = os.path.isdir("/data/nginx/proxy_host") or os.path.isfile("/data/database.sqlite")
+if npm_public or (nginx_public and npm_layout):
+    emit("edge", "app:nginx-proxy-manager")
+    emit("edge", "app:openresty")
+elif nginx_public:
+    emit("edge", "deb:nginx")
+    emit("edge", "app:openresty")
+if cf_public:
+    emit("edge", "app:cloudflared")
+scan_plex()
+PY
+}
+
+process_exposure_facts() {
+  local ctid="$1" line kind field_a field_b backend_ctid port ident matched
+
+  while IFS= read -r line; do
+    [[ -n "${line}" ]] || continue
+    IFS='|' read -r kind field_a field_b <<<"${line}"
+    case "${kind}" in
+      edge)
+        set_detected_exposure "${ctid}" "${field_a}" "internet"
+        ;;
+      direct)
+        set_detected_exposure "${ctid}" "${field_a}" "internet"
+        ;;
+      backend)
+        backend_ctid="$(lookup_ctid "${field_a}")"
+        [[ -n "${backend_ctid}" ]] || continue
+        port="${field_b}"
+        matched=0
+        if [[ -n "${port}" ]]; then
+          while IFS='|' read -r _ _ ident; do
+            [[ -n "${ident}" ]] || continue
+            set_detected_exposure "${backend_ctid}" "${ident}" "internet-via-proxy"
+            matched=1
+          done < <(awk -F'|' -v c="${backend_ctid}" -v p="${port}" '$1 == c && $2 == p { print }' <<<"${PORT_BINDINGS}")
+          while IFS='|' read -r _ ident; do
+            [[ -n "${ident}" ]] || continue
+            if ct_has_identifier "${backend_ctid}" "${ident}"; then
+              set_detected_exposure "${backend_ctid}" "${ident}" "internet-via-proxy"
+              matched=1
+            fi
+          done < <(awk -F'|' -v p="${port}" '$1 == p { print }' <<<"${KNOWN_PORTS}")
+        fi
+        if [[ "${matched}" -eq 0 ]]; then
+          set_detected_exposure "${backend_ctid}" "*" "internet-via-proxy"
+        fi
+        ;;
+    esac
+  done
+}
+
+collect_lxc_guest_exposure() {
+  local ctid="$1" facts
+  timeout 10s pct exec "${ctid}" -- python3 -c 'print(1)' >/dev/null 2>&1 || return 0
+  facts="$(timeout 30s pct exec "${ctid}" -- python3 -c "$(exposure_probe_python)" 2>/dev/null || true)"
+  process_exposure_facts "${ctid}" <<<"${facts}"
+}
+
+apply_detected_exposure() {
+  COMPONENTS="$(jq -c --argjson detected "${DETECTED_EXPOSURE}" '
+    def rank($e):
+      if $e == "internet" then 3
+      elif $e == "internet-via-proxy" then 2
+      elif $e == "vpn-only" then 1
+      else 0 end;
+    def ctid:
+      ((.product | capture("LXC guest (?<id>[0-9]+)") | .id) // "");
+    def infra:
+      (.kind == "operating-system")
+      or (.kind == "platform")
+      or (.identifier | test("^(deb:docker-ce|deb:containerd\\.io|app:nodejs|app:uv|app:par2cmdline-turbo)$"))
+      or (.identifier | test("\\.failed$"));
+    map(
+      . as $c
+      | ctid as $id
+      | ($detected[$id][$c.identifier] // (
+          if ($id != "" and ($detected[$id]["*"] // null) != null and ($c | infra | not))
+          then $detected[$id]["*"]
+          else null end
+        )) as $new
+      | if $new != null and rank($new) > rank($c.exposure)
+        then .exposure = $new
+        else .
+        end
+    )
+  ' <<<"${COMPONENTS}")"
+}
+
+apply_exposure_overrides() {
+  local line key exp overrides
+  [[ -r "${EXPOSURE_MAP_FILE}" ]] || return 0
+
+  overrides='{}'
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    line="${line%%#*}"
+    key="$(awk '{print $1}' <<<"${line}")"
+    exp="$(awk '{print $2}' <<<"${line}")"
+    [[ -n "${key}" && -n "${exp}" ]] || continue
+    case "${exp}" in
+      internet|internet-via-proxy|vpn-only|lan-only) ;;
+      *)
+        echo "Ignoring invalid exposure override: ${key} ${exp}" >&2
+        continue
+        ;;
+    esac
+    overrides="$(jq -c --arg k "${key}" --arg e "${exp}" '.[$k] = $e' <<<"${overrides}")"
+  done <"${EXPOSURE_MAP_FILE}"
+
+  COMPONENTS="$(jq -c --argjson o "${overrides}" '
+    def ctid:
+      ((.product | capture("LXC guest (?<id>[0-9]+)") | .id) // "");
+    map(
+      ctid as $id
+      | ($o[.identifier + "@" + $id] // $o[.identifier] // null) as $new
+      | if $new != null then .exposure = $new else . end
+    )
+  ' <<<"${COMPONENTS}")"
+}
+
 collect_lxc_guests() {
   local ctid
   local -a ctids
@@ -513,8 +1013,13 @@ collect_lxc_guests() {
 
   for ctid in "${ctids[@]}"; do
     # CTID labels guest rows; hostnames, names, IPs, and internal endpoints are omitted.
+    record_guest_addresses "${ctid}"
     collect_lxc_guest_apps "${ctid}"
     collect_lxc_guest_docker "${ctid}"
+  done
+
+  for ctid in "${ctids[@]}"; do
+    collect_lxc_guest_exposure "${ctid}"
   done
 }
 
@@ -540,6 +1045,8 @@ collect_drop_ins() {
 collect_proxmox_host
 collect_lxc_guests
 collect_drop_ins
+apply_detected_exposure
+apply_exposure_overrides
 
 # Combine identical deployments after CTID labels separate guest-specific rows.
 COMPONENTS="$(jq -c '
